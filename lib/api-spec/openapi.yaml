@@ -3,13 +3,15 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Legends SMP public site and management API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: legends
+    description: Legends SMP site content and management
 paths:
   /healthz:
     get:
@@ -24,6 +26,104 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /legends/content:
+    get:
+      operationId: getLegendsContent
+      tags: [legends]
+      summary: Get the public Legends SMP site content
+      responses:
+        "200":
+          description: Current public site content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteContent"
+  /legends/auth/session:
+    get:
+      operationId: getLegendsSession
+      tags: [legends]
+      summary: Check the current management session
+      responses:
+        "200":
+          description: Current session, if any
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+  /legends/auth/login:
+    post:
+      operationId: loginLegendsPanel
+      tags: [legends]
+      summary: Sign in to the admin or owner panel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PanelLoginInput"
+      responses:
+        "200":
+          description: Authenticated panel session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Invalid access code
+  /legends/auth/logout:
+    post:
+      operationId: logoutLegendsPanel
+      tags: [legends]
+      summary: End the current management session
+      responses:
+        "200":
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+  /legends/admin/content:
+    put:
+      operationId: updateLegendsContent
+      tags: [legends]
+      summary: Replace editable public site content
+      description: Requires an admin or owner panel session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteContentInput"
+      responses:
+        "200":
+          description: Saved public site content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteContent"
+        "401":
+          description: Admin or owner session required
+  /legends/owner/codes:
+    patch:
+      operationId: updateLegendsCodes
+      tags: [legends]
+      summary: Change the admin access code and/or owner password
+      description: Requires an owner panel session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccessCodeUpdate"
+      responses:
+        "200":
+          description: Access codes updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessCodeUpdateResult"
+        "401":
+          description: Owner session required
 components:
   schemas:
     HealthStatus:
@@ -33,4 +133,179 @@ components:
           type: string
       required:
         - status
+    DiscordLink:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        url:
+          type: string
+          format: uri
+      required: [id, label, url]
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: string
+        minecraftUsername:
+          type: string
+        skinUrl:
+          type: ["string", "null"]
+        discordUsername:
+          type: string
+        displayName:
+          type: string
+        rank:
+          type: string
+        inGameStaff:
+          type: boolean
+      required:
+        - id
+        - minecraftUsername
+        - skinUrl
+        - discordUsername
+        - displayName
+        - rank
+        - inGameStaff
+    RuleEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+      required: [id, title, body]
+    PunishmentSet:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+      required: [id, title, description]
+    EventEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        time:
+          type: string
+        description:
+          type: string
+        reward:
+          type: string
+      required: [id, title, time, description, reward]
+    SiteContent:
+      type: object
+      properties:
+        serverIp:
+          type: string
+        season:
+          type: string
+        discordLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiscordLink"
+        staff:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffMember"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleEntry"
+        punishments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PunishmentSet"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventEntry"
+      required:
+        - serverIp
+        - season
+        - discordLinks
+        - staff
+        - rules
+        - punishments
+        - events
+    SiteContentInput:
+      type: object
+      properties:
+        serverIp:
+          type: string
+        season:
+          type: string
+        discordLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiscordLink"
+        staff:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffMember"
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleEntry"
+        punishments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PunishmentSet"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventEntry"
+      required:
+        - serverIp
+        - season
+        - discordLinks
+        - staff
+        - rules
+        - punishments
+        - events
+    PanelLoginInput:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+        panel:
+          type: string
+          enum: [admin, owner]
+      required: [code, panel]
+    AuthSession:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        role:
+          type: ["string", "null"]
+          enum: [admin, owner, null]
+      required: [authenticated, role]
+    AccessCodeUpdate:
+      type: object
+      properties:
+        adminCode:
+          type: string
+          minLength: 8
+        ownerCode:
+          type: string
+          minLength: 8
+      minProperties: 1
+    AccessCodeUpdateResult:
+      type: object
+      properties:
+        updated:
+          type: boolean
+      required: [updated]
 

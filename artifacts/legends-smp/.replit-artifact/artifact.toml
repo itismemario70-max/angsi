@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Legends SMP"
+description = "The official Legends SMP website: a public hub for server details, staff, rules, punishments and events, with secure admin and owner management."
+version = "1.0.0"
+id = "artifacts/legends-smp"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23829
+
+[services.development]
+run = "pnpm --filter @workspace/legends-smp run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/legends-smp", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/legends-smp/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23829"
+BASE_PATH = "/"
