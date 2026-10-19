@@ -4,6 +4,8 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Run & Operate
 
+- Cloudflare Workers Builds: use `pnpm --filter @workspace/legends-smp run deploy`. This command builds the frontend at `/` before running Wrangler; no separate build command is needed. `pnpm --filter @workspace/legends-smp run deploy --dry-run` builds and bundles without publishing.
+- Cloudflare requires `HYPERDRIVE_ID` in the build environment and the existing Worker secrets `SESSION_SECRET`, `LEGENDS_ADMIN_CODE`, and `LEGENDS_OWNER_CODE`. Keep these configured in Cloudflare; never commit their values.
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages

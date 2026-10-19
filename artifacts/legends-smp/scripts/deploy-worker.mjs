@@ -7,6 +7,19 @@ const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
+
+function run(command, args, env = process.env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: projectRoot,
+      env,
+      stdio: "inherit",
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve(code ?? 1));
+  });
+}
+
 const hyperdriveId = process.env.HYPERDRIVE_ID?.trim();
 
 if (!hyperdriveId) {
@@ -14,6 +27,18 @@ if (!hyperdriveId) {
     "Set HYPERDRIVE_ID in Cloudflare Workers Builds to the ID of the Hyperdrive configuration for the Legends PostgreSQL database.",
   );
   process.exit(1);
+}
+
+// Workers serves this site at the domain root, independently of Replit's
+// preview routing. Build on every deployment, including dry runs.
+const buildExitCode = await run("pnpm", ["run", "build"], {
+  ...process.env,
+  NODE_ENV: "production",
+  BASE_PATH: "/",
+  PORT: process.env.PORT || "5173",
+});
+if (buildExitCode !== 0) {
+  process.exit(Number(buildExitCode));
 }
 
 const configPath = path.join(projectRoot, ".wrangler.deploy.json");
@@ -41,15 +66,7 @@ try {
   const deployArgs = ["wrangler", "deploy", "--config", configPath];
   if (isDryRun) deployArgs.push("--dry-run");
 
-  const exitCode = await new Promise((resolve, reject) => {
-    const deploy = spawn("npx", deployArgs, {
-      cwd: projectRoot,
-      env: process.env,
-      stdio: "inherit",
-    });
-    deploy.once("error", reject);
-    deploy.once("exit", (code) => resolve(code ?? 1));
-  });
+  const exitCode = await run("npx", deployArgs);
 
   if (exitCode !== 0) process.exitCode = Number(exitCode);
 } finally {
