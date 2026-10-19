@@ -20,11 +20,11 @@ function run(command, args, env = process.env) {
   });
 }
 
-const hyperdriveId = process.env.HYPERDRIVE_ID?.trim();
+const d1DatabaseId = process.env.D1_DATABASE_ID?.trim();
 
-if (!hyperdriveId) {
+if (!d1DatabaseId) {
   console.error(
-    "Set HYPERDRIVE_ID in Cloudflare Workers Builds to the ID of the Hyperdrive configuration for the Legends PostgreSQL database.",
+    "Set D1_DATABASE_ID in Cloudflare Workers Builds to the ID of the Cloudflare D1 database for Legends SMP.",
   );
   process.exit(1);
 }
@@ -56,7 +56,13 @@ const config = {
     run_worker_first: ["/api/*"],
     not_found_handling: "single-page-application",
   },
-  hyperdrive: [{ binding: "HYPERDRIVE", id: hyperdriveId }],
+  d1_databases: [
+    {
+      binding: "DB",
+      database_name: "legends",
+      database_id: d1DatabaseId,
+    },
+  ],
 };
 
 await writeFile(configPath, JSON.stringify(config, null, 2));

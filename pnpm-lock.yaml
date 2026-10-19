@@ -226,15 +226,6 @@ importers:
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
-      '@workspace/db':
-        specifier: workspace:*
-        version: link:../../lib/db
-      drizzle-orm:
-        specifier: 'catalog:'
-        version: 0.45.2(@types/pg@8.23.1)(pg@8.23.0)
-      pg:
-        specifier: ^8.23.0
-        version: 8.23.0
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0

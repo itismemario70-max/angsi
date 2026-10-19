@@ -1,23 +1,24 @@
-# [Project name]
+# Legends SMP
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+The official Legends SMP website, with public server information and secure admin and owner panels for managing site content.
 
 ## Run & Operate
 
-- Cloudflare Workers Builds: use `pnpm --filter @workspace/legends-smp run deploy`. This command builds the frontend at `/` before running Wrangler; no separate build command is needed. `pnpm --filter @workspace/legends-smp run deploy --dry-run` builds and bundles without publishing.
-- Cloudflare requires `HYPERDRIVE_ID` in the build environment and the existing Worker secrets `SESSION_SECRET`, `LEGENDS_ADMIN_CODE`, and `LEGENDS_OWNER_CODE`. Keep these configured in Cloudflare; never commit their values.
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Cloudflare Workers Builds: use `pnpm --filter @workspace/legends-smp run deploy`. The command builds the frontend and deploys the dynamic Worker API. `pnpm --filter @workspace/legends-smp run deploy --dry-run` builds and bundles without publishing.
+- Create a Cloudflare D1 database named `legends`, then set its ID as `D1_DATABASE_ID` in the Cloudflare Workers Builds environment.
+- Configure `SESSION_SECRET`, `LEGENDS_ADMIN_CODE`, and `LEGENDS_OWNER_CODE` as Cloudflare Worker secrets. Never put their values in source code. The Worker hashes the access codes when it initializes its settings row.
+- The Worker creates its D1 settings table on first request. Existing PostgreSQL content is not copied into D1 automatically; migrate it separately before switching production traffic if it must be retained.
+- The optional Replit Express API server uses PostgreSQL via `DATABASE_URL`: `pnpm --filter @workspace/api-server run dev`.
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- Cloudflare API: dynamic Workers API with D1 storage
+- Optional Replit API: Express 5 with PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)

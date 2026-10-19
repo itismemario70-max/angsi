@@ -5,13 +5,6 @@ import {
   scrypt,
   timingSafeEqual,
 } from "node:crypto";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
-import { Pool } from "pg";
-import {
-  legendsSettingsTable,
-  type LegendsContent,
-} from "@workspace/db/schema";
 import {
   GetLegendsContentResponse,
   GetLegendsSessionResponse,
@@ -24,13 +17,44 @@ import {
   UpdateLegendsContentResponse,
 } from "@workspace/api-zod";
 
+interface D1RunResult {
+  success: boolean;
+  meta?: { changes?: number };
+}
+
+interface D1PreparedStatement {
+  bind(...values: (string | number | null)[]): D1PreparedStatement;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  run(): Promise<D1RunResult>;
+}
+
+interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+}
+
 interface WorkerEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
-  HYPERDRIVE?: { connectionString: string };
+  DB: D1Database;
   LEGENDS_ADMIN_CODE?: string;
   LEGENDS_OWNER_CODE?: string;
   SESSION_SECRET?: string;
 }
+
+type LegendsSettings = {
+  content: unknown;
+  adminCodeHash: string;
+  ownerCodeHash: string;
+  adminVersion: number;
+  ownerVersion: number;
+};
+
+type LegendsSettingsRow = {
+  content: string;
+  admin_code_hash: string;
+  owner_code_hash: string;
+  admin_version: number;
+  owner_version: number;
+};
 
 type PanelRole = "admin" | "owner";
 type SessionPayload = {
@@ -45,7 +69,7 @@ const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const LOCKOUT_MS = 10 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 6;
 
-const emptyContent: LegendsContent = {
+const emptyContent = {
   serverIp: "",
   season: "",
   discordLinks: [],
@@ -55,62 +79,23 @@ const emptyContent: LegendsContent = {
   events: [],
 };
 
-let pool: Pool | undefined;
-let poolConnectionString: string | undefined;
-let schemaReady: Promise<void> | undefined;
 const loginAttempts = new Map<
   string,
   { count: number; lockedUntil: number }
 >();
 
-function getDatabase(env: WorkerEnv) {
-  const connectionString = env.HYPERDRIVE?.connectionString;
-  if (!connectionString) {
-    throw new Error("The HYPERDRIVE binding is not configured.");
-  }
-
-  if (!pool || poolConnectionString !== connectionString) {
-    pool = new Pool({
-      connectionString,
-      max: 1,
-      connectionTimeoutMillis: 10_000,
-      idleTimeoutMillis: 10_000,
-    });
-    poolConnectionString = connectionString;
-    schemaReady = undefined;
-  }
-
-  return drizzle(pool, { schema: { legendsSettingsTable } });
-}
-
 async function ensureSettingsTable(env: WorkerEnv) {
-  const db = getDatabase(env);
-  if (!schemaReady) {
-    const activePool = pool;
-    if (!activePool) throw new Error("The PostgreSQL pool is unavailable.");
-    schemaReady = activePool
-      .query("SELECT to_regclass('public.legends_settings') AS relation")
-      .then(async (result) => {
-        if (result.rows[0]?.relation) return;
-        await activePool.query(`
-          CREATE TABLE IF NOT EXISTS public.legends_settings (
-            id text PRIMARY KEY,
-            content jsonb NOT NULL,
-            admin_code_hash text NOT NULL,
-            owner_code_hash text NOT NULL,
-            admin_version integer NOT NULL DEFAULT 1,
-            owner_version integer NOT NULL DEFAULT 1,
-            updated_at timestamptz NOT NULL DEFAULT now()
-          )
-        `);
-      })
-      .catch((error) => {
-        schemaReady = undefined;
-        throw error;
-      });
-  }
-  await schemaReady;
-  return db;
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS legends_settings (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      admin_code_hash TEXT NOT NULL,
+      owner_code_hash TEXT NOT NULL,
+      admin_version INTEGER NOT NULL DEFAULT 1,
+      owner_version INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    )
+  `).run();
 }
 
 function deriveKey(code: string, salt: string): Promise<Buffer> {
@@ -148,35 +133,48 @@ function requiredSecret(value: string | undefined, name: string): string {
 }
 
 async function getSettings(env: WorkerEnv) {
-  const db = await ensureSettingsTable(env);
-  const existing = await db
-    .select()
-    .from(legendsSettingsTable)
-    .where(eq(legendsSettingsTable.id, SETTINGS_ID))
-    .limit(1);
-  if (existing[0]) return existing[0];
+  await ensureSettingsTable(env);
+  const readSettings = async (): Promise<LegendsSettings | null> => {
+    const row = await env.DB.prepare(`
+      SELECT content, admin_code_hash, owner_code_hash, admin_version, owner_version
+      FROM legends_settings
+      WHERE id = ?
+      LIMIT 1
+    `)
+      .bind(SETTINGS_ID)
+      .first<LegendsSettingsRow>();
+    if (!row) return null;
+    return {
+      content: JSON.parse(row.content),
+      adminCodeHash: row.admin_code_hash,
+      ownerCodeHash: row.owner_code_hash,
+      adminVersion: row.admin_version,
+      ownerVersion: row.owner_version,
+    };
+  };
+
+  const existing = await readSettings();
+  if (existing) return existing;
 
   const adminCode = requiredSecret(env.LEGENDS_ADMIN_CODE, "LEGENDS_ADMIN_CODE");
   const ownerCode = requiredSecret(env.LEGENDS_OWNER_CODE, "LEGENDS_OWNER_CODE");
-  const created = await db
-    .insert(legendsSettingsTable)
-    .values({
-      id: SETTINGS_ID,
-      content: emptyContent,
-      adminCodeHash: await hashCode(adminCode),
-      ownerCodeHash: await hashCode(ownerCode),
-    })
-    .onConflictDoNothing()
-    .returning();
-  if (created[0]) return created[0];
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO legends_settings (
+      id, content, admin_code_hash, owner_code_hash, updated_at
+    ) VALUES (?, ?, ?, ?, ?)
+  `)
+    .bind(
+      SETTINGS_ID,
+      JSON.stringify(emptyContent),
+      await hashCode(adminCode),
+      await hashCode(ownerCode),
+      new Date().toISOString(),
+    )
+    .run();
 
-  const raced = await db
-    .select()
-    .from(legendsSettingsTable)
-    .where(eq(legendsSettingsTable.id, SETTINGS_ID))
-    .limit(1);
-  if (!raced[0]) throw new Error("Could not initialize Legends settings.");
-  return raced[0];
+  const createdOrRaced = await readSettings();
+  if (!createdOrRaced) throw new Error("Could not initialize Legends settings.");
+  return createdOrRaced;
 }
 
 function getSessionSecret(env: WorkerEnv): string {
@@ -413,18 +411,21 @@ async function handleLegendsApi(
       return jsonResponse({ error: "Review the site content fields." }, 400);
     }
 
-    const [saved] = await getDatabase(env)
-      .update(legendsSettingsTable)
-      .set({
-        content: parsed.data as LegendsContent,
-        updatedAt: new Date(),
-      })
-      .where(eq(legendsSettingsTable.id, SETTINGS_ID))
-      .returning();
-    if (!saved) {
+    const saved = await env.DB.prepare(`
+      UPDATE legends_settings
+      SET content = ?, updated_at = ?
+      WHERE id = ?
+    `)
+      .bind(
+        JSON.stringify(parsed.data),
+        new Date().toISOString(),
+        SETTINGS_ID,
+      )
+      .run();
+    if (!saved.success || !saved.meta?.changes) {
       return jsonResponse({ error: "Could not save site content." }, 500);
     }
-    return jsonResponse(UpdateLegendsContentResponse.parse(saved.content));
+    return jsonResponse(UpdateLegendsContentResponse.parse(parsed.data));
   }
 
   if (pathname === "/api/legends/owner/codes" && request.method === "PATCH") {
@@ -452,21 +453,33 @@ async function handleLegendsApi(
       return jsonResponse({ error: "Enter at least one new code." }, 400);
     }
 
-    const changes: Partial<typeof legendsSettingsTable.$inferInsert> = {
-      updatedAt: new Date(),
-    };
+    const assignments = ["updated_at = ?"];
+    const values: (string | number)[] = [new Date().toISOString()];
     if (adminCode) {
-      changes.adminCodeHash = await hashCode(adminCode);
-      changes.adminVersion = settings.adminVersion + 1;
+      assignments.push("admin_code_hash = ?", "admin_version = ?");
+      values.push(
+        await hashCode(adminCode),
+        settings.adminVersion + 1,
+      );
     }
     if (ownerCode) {
-      changes.ownerCodeHash = await hashCode(ownerCode);
-      changes.ownerVersion = settings.ownerVersion + 1;
+      assignments.push("owner_code_hash = ?", "owner_version = ?");
+      values.push(
+        await hashCode(ownerCode),
+        settings.ownerVersion + 1,
+      );
     }
-    await getDatabase(env)
-      .update(legendsSettingsTable)
-      .set(changes)
-      .where(eq(legendsSettingsTable.id, SETTINGS_ID));
+    values.push(SETTINGS_ID);
+    const updated = await env.DB.prepare(`
+      UPDATE legends_settings
+      SET ${assignments.join(", ")}
+      WHERE id = ?
+    `)
+      .bind(...values)
+      .run();
+    if (!updated.success || !updated.meta?.changes) {
+      return jsonResponse({ error: "Could not update access codes." }, 500);
+    }
 
     return jsonResponse(UpdateLegendsCodesResponse.parse({ updated: true }));
   }
