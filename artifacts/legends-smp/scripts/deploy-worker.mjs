@@ -53,7 +53,7 @@ const config = {
   assets: {
     directory: "./dist/public",
     binding: "ASSETS",
-    run_worker_first: ["/api/*"],
+    run_worker_first: true,
     not_found_handling: "single-page-application",
   },
   d1_databases: [
