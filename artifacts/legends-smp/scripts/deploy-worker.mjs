@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,29 +41,16 @@ if (buildExitCode !== 0) {
   process.exit(Number(buildExitCode));
 }
 
+const sourceConfigPath = path.join(projectRoot, "wrangler.jsonc");
 const configPath = path.join(projectRoot, ".wrangler.deploy.json");
-const config = {
-  name: "legends",
-  main: "./worker.ts",
-  compatibility_date: "2026-10-19",
-  compatibility_flags: ["nodejs_compat"],
-  keep_vars: true,
-  workers_dev: true,
-  preview_urls: false,
-  assets: {
-    directory: "./dist/public",
-    binding: "ASSETS",
-    run_worker_first: true,
-    not_found_handling: "single-page-application",
+const config = JSON.parse(await readFile(sourceConfigPath, "utf8"));
+config.d1_databases = [
+  {
+    binding: "DB",
+    database_name: "legends",
+    database_id: d1DatabaseId,
   },
-  d1_databases: [
-    {
-      binding: "DB",
-      database_name: "legends",
-      database_id: d1DatabaseId,
-    },
-  ],
-};
+];
 
 await writeFile(configPath, JSON.stringify(config, null, 2));
 
