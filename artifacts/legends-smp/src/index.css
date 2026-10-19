@@ -1065,5 +1065,30 @@ html[data-theme="dark"] .image-upload-control { background:#26322c;border-color:
   .review-actions { align-items:flex-start; flex-direction:column; }
   .review-actions > div { flex-wrap:wrap; }
   .image-upload-control { align-items:flex-start; }
-  .form-nav { display:none!important; }
+}
+
+/* Shared public navigation and motion for the separate information pages. */
+.nav-links { min-width:0; gap:clamp(8px, 1vw, 14px); margin-left:auto; margin-right:clamp(10px, 1.5vw, 20px); }
+.nav-links a { white-space:nowrap; font-size:clamp(9px, .78vw, 11px); }
+.reveal-in { animation:reveal .68s cubic-bezier(.2,.7,.2,1) both; }
+.submission-aside,.plugin-intro { animation:reveal .62s cubic-bezier(.2,.7,.2,1) both; }
+.submission-card,.plugin-content { animation:reveal .72s .1s cubic-bezier(.2,.7,.2,1) both; }
+
+.discord-markdown .discord-heading { color:var(--forest); font-family:'Oswald',sans-serif; font-weight:600; line-height:1.2; margin:20px 0 8px; }
+.discord-markdown h2.discord-heading { font-size:24px; }
+.discord-markdown h3.discord-heading { font-size:19px; }
+.discord-markdown h4.discord-heading { font-size:15px; }
+.discord-markdown .discord-small-line { color:#888b7d; font-size:9px; }
+.discord-code-block { position:relative; overflow-x:auto; margin:12px 0; padding:17px; border:1px solid rgba(52,78,58,.14); background:rgba(52,78,58,.06); color:var(--ink); }
+.discord-code-block code { padding:0; background:none; font:400 11px/1.7 'DM Mono',monospace; white-space:pre; }
+.discord-code-language { display:block; margin-bottom:8px; color:#898c7c; font:500 8px 'DM Mono',monospace; text-transform:uppercase; }
+.discord-spoiler { border:0; border-radius:3px; padding:0 4px; background:#425147; color:transparent; text-shadow:0 0 7px rgba(255,255,255,.85); cursor:pointer; }
+.discord-spoiler.is-revealed { color:inherit; background:rgba(52,78,58,.1); text-shadow:none; }
+
+@media (min-width:701px) and (max-width:1000px) {
+  .site-nav { padding:0 4%; }
+  .site-nav .nav-links { display:none; position:absolute; top:75px; left:0; right:0; margin:0; padding:14px 5% 18px; flex-direction:column; align-items:flex-start; gap:4px; background:var(--paper-bright); border-bottom:1px solid var(--line); box-shadow:0 12px 20px rgba(38,59,49,.08); }
+  .site-nav .nav-links.nav-open { display:flex; }
+  .site-nav .nav-links a { padding:8px 0; font-size:11px; }
+  .site-nav .mobile-menu { display:grid; place-items:center; padding:6px; }
 }

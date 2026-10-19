@@ -65,6 +65,54 @@ function Brand({ dark = false }: { dark?: boolean }) {
   );
 }
 
+function CommunityHeader({ page }: { page: string }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const links = [
+    { href: '/', label: 'Home', page: 'home' },
+    { href: '/staff', label: 'Staff', page: 'staff' },
+    { href: '/rules', label: 'Rules', page: 'rules' },
+    { href: '/events', label: 'Events', page: 'events' },
+    { href: '/punishments', label: 'Punishments', page: 'punishments' },
+    { href: '/plugin', label: 'Plugin info', page: 'plugin' },
+    { href: '/apply', label: 'Apply for staff', page: 'apply' },
+    { href: '/appeal', label: 'Ban appeal', page: 'appeal' },
+  ];
+  const closeMenu = () => setMobileOpen(false);
+
+  return (
+    <header className="site-nav">
+      <Brand />
+      <nav id="public-navigation" className={mobileOpen ? 'nav-links nav-open' : 'nav-links'} aria-label="Main navigation">
+        {links.map(link => (
+          <Link
+            key={link.href}
+            href={link.href}
+            aria-current={page === link.page ? 'page' : undefined}
+            onClick={closeMenu}
+          >
+            {link.label}
+          </Link>
+        ))}
+      </nav>
+      <Link href="/join" className="nav-join" onClick={closeMenu} data-testid="button-join-nav">
+        Join the world <ArrowRight size={15} />
+      </Link>
+      <ThemeToggle />
+      <button
+        className="mobile-menu"
+        type="button"
+        onClick={() => setMobileOpen(value => !value)}
+        aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={mobileOpen}
+        aria-controls="public-navigation"
+        data-testid="button-mobile-menu"
+      >
+        {mobileOpen ? <X /> : <Menu />}
+      </button>
+    </header>
+  );
+}
+
 function SkinPortrait({ member }: { member: Staff }) {
   const [failed, setFailed] = useState(false);
   const username = member.minecraftUsername.trim();
@@ -92,7 +140,7 @@ function SkinPortrait({ member }: { member: Staff }) {
 
 function DiscordInline({ text }: { text: string }) {
   const tokens = text.split(
-    /(\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|`[^`]+`|\*[^*]+\*|_[^_]+_)/g,
+    /(\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\|\|[^|]+\|\||`[^`]+`|\*[^*]+\*|_[^_]+_)/g,
   );
   return (
     <>
@@ -105,6 +153,9 @@ function DiscordInline({ text }: { text: string }) {
         }
         if (token.startsWith("~~") && token.endsWith("~~")) {
           return <del key={index}>{token.slice(2, -2)}</del>;
+        }
+        if (token.startsWith("||") && token.endsWith("||")) {
+          return <DiscordSpoiler key={index} text={token.slice(2, -2)} />;
         }
         if (token.startsWith("`") && token.endsWith("`")) {
           return <code key={index}>{token.slice(1, -1)}</code>;
@@ -121,33 +172,78 @@ function DiscordInline({ text }: { text: string }) {
   );
 }
 
-function DiscordText({ text }: { text: string }) {
+function DiscordSpoiler({ text }: { text: string }) {
+  const [revealed, setRevealed] = useState(false);
   return (
-    <div className="discord-markdown">
-      {text.split(/\r?\n/).map((line, index) => {
-        if (!line.trim()) return <div className="discord-spacer" key={index} />;
-        if (line.trimStart().startsWith(">")) {
-          return (
-            <blockquote key={index}>
-              <DiscordInline text={line.trimStart().slice(1).trimStart()} />
-            </blockquote>
-          );
-        }
-        const listItem = line.match(/^\s*[-*]\s+(.+)$/);
-        if (listItem) {
-          return (
-            <p className="discord-list-line" key={index}>
-              <DiscordInline text={listItem[1]} />
-            </p>
-          );
-        }
-        return (
-          <p key={index}>
-            <DiscordInline text={line} />
-          </p>
-        );
-      })}
-    </div>
+    <button
+      type="button"
+      className={`discord-spoiler${revealed ? ' is-revealed' : ''}`}
+      onClick={() => setRevealed(value => !value)}
+      aria-pressed={revealed}
+      aria-label={revealed ? 'Hide spoiler' : 'Reveal spoiler'}
+    >
+      {text}
+    </button>
+  );
+}
+
+function DiscordText({ text }: { text: string }) {
+  const lines = text.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trimStart().startsWith('```')) {
+      const codeLines: string[] = [];
+      const language = line.trimStart().slice(3).trim();
+      while (++index < lines.length && !lines[index].trimStart().startsWith('```')) {
+        codeLines.push(lines[index]);
+      }
+      blocks.push(
+        <pre className="discord-code-block" key={`code-${index}`}>
+          {language && <span className="discord-code-language">{language}</span>}
+          <code>{codeLines.join('\n')}</code>
+        </pre>,
+      );
+      continue;
+    }
+    if (!line.trim()) {
+      blocks.push(<div className="discord-spacer" key={`space-${index}`} />);
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length <= 2 ? 2 : heading[1].length <= 4 ? 3 : 4;
+      const Heading = `h${level}` as 'h2' | 'h3' | 'h4';
+      blocks.push(<Heading className="discord-heading" key={`heading-${index}`}><DiscordInline text={heading[2]} /></Heading>);
+      continue;
+    }
+    if (line.startsWith('-# ')) {
+      blocks.push(<p className="discord-small-line" key={`small-${index}`}><DiscordInline text={line.slice(3)} /></p>);
+      continue;
+    }
+    if (line.trimStart().startsWith(">")) {
+      blocks.push(
+        <blockquote key={`quote-${index}`}>
+          <DiscordInline text={line.trimStart().slice(1).trimStart()} />
+        </blockquote>,
+      );
+      continue;
+    }
+    const listItem = line.match(/^\s*[-*]\s+(.+)$/);
+    if (listItem) {
+      blocks.push(
+        <p className="discord-list-line" key={`list-${index}`}>
+          <DiscordInline text={listItem[1]} />
+        </p>,
+      );
+      continue;
+    }
+    blocks.push(<p key={`line-${index}`}><DiscordInline text={line} /></p>);
+  }
+
+  return (
+    <div className="discord-markdown">{blocks}</div>
   );
 }
 
@@ -156,7 +252,6 @@ function CommunityHome() {
   const content = data ?? emptyContent;
   const [location, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [showAllStaff, setShowAllStaff] = useState(false);
   const page = location === '/' ? 'home' : location.slice(1);
   const copyAddress = async () => {
@@ -173,24 +268,7 @@ function CommunityHome() {
   return (
     <main className="community">
       <div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div>
-      <header className="site-nav">
-        <Brand />
-        <nav id="public-navigation" className={mobileOpen ? 'nav-links nav-open' : 'nav-links'} aria-label="Main navigation">
-          <Link href="/" aria-current={page === 'home' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-world">Home</Link>
-          <Link href="/staff" aria-current={page === 'staff' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-staff">Staff</Link>
-          <Link href="/rules" aria-current={page === 'rules' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-rules">Rules</Link>
-          <Link href="/events" aria-current={page === 'events' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-events">Events</Link>
-          <Link href="/punishments" aria-current={page === 'punishments' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-punishments">Punishments</Link>
-          {page !== 'home' && <>
-            <Link href="/plugin" onClick={() => setMobileOpen(false)}>Plugin info</Link>
-            <Link href="/apply" onClick={() => setMobileOpen(false)}>Apply for staff</Link>
-            {content.banAppealsEnabled && <Link href="/appeal" onClick={() => setMobileOpen(false)}>Ban appeal</Link>}
-          </>}
-        </nav>
-        <Link href="/join" className="nav-join" onClick={() => setMobileOpen(false)} data-testid="button-join-nav">Join the world <ArrowRight size={15} /></Link>
-        <ThemeToggle />
-        <button className="mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileOpen} aria-controls="public-navigation" data-testid="button-mobile-menu">{mobileOpen ? <X /> : <Menu />}</button>
-      </header>
+      <CommunityHeader page={page} />
       {isError && <div className="fetch-notice" role="alert">The world details could not be reached. <button onClick={() => refetch()} data-testid="button-retry-content">Try again</button></div>}
 
       {(page === 'home') && <>
@@ -219,7 +297,7 @@ function CommunityHome() {
       </section>
       </>}
 
-      {page === 'join' && <section className="world-strip" id="join">
+      {page === 'join' && <section className="world-strip reveal-in" id="join">
         <div className="strip-intro"><span className="section-kicker">YOUR WAY IN</span><h2>Same horizon.<br /><span>New story.</span></h2></div>
         <div className="connect-panel">
           <div className="connect-top"><div><span className="section-kicker">CURRENT SEASON</span><h3 data-testid="text-season">{content.season || 'Awaiting the next chapter'}</h3></div><span className="season-stamp"><Leaf size={17} /> SEASON</span></div>
@@ -254,7 +332,7 @@ function CommunityHome() {
       </section>
       }
 
-      {(page === 'home' || page === 'staff') && <section className="people-section content-section">
+      {(page === 'home' || page === 'staff') && <section className={`people-section content-section ${page === 'staff' ? 'reveal-in' : ''}`}>
         <div className="section-heading">
           <div><span className="section-kicker">THE PEOPLE BEHIND THE WORLD</span><h2>Keepers of<br /><em>the realm.</em></h2></div>
           <p>Good worlds don’t run themselves. Meet the folks who keep this one welcoming, fair, and running smoothly.</p>
@@ -272,7 +350,7 @@ function CommunityHome() {
       </section>
       }
 
-      {page === 'rules' && <section className="charter-section" id="charter">
+      {page === 'rules' && <section className="charter-section reveal-in" id="charter">
         <div className="charter-heading"><div><span className="section-kicker">A FEW THINGS WE HOLD TRUE</span><h2>The <em>charter.</em></h2></div><span className="charter-mark"><ShieldCheck size={24} /> A GOOD WORLD<br />IS EVERYONE’S WORK</span></div>
         <div className="charter-layout">
           <div className="charter-aside"><span>KEEP IT KIND.<br />KEEP IT REAL.</span><div className="aside-rule" /><p>Simple promises.<br />Better adventures.</p></div>
@@ -282,13 +360,13 @@ function CommunityHome() {
       </section>
       }
 
-      {page === 'events' && <section className="gatherings content-section" id="calendar">
+      {page === 'events' && <section className="gatherings content-section reveal-in" id="calendar">
         <div className="section-heading"><div><span className="section-kicker">THERE’S ALWAYS SOMETHING BREWING</span><h2>Meet me at<br /><em>the campfire.</em></h2></div><p>Good memories don’t schedule themselves. Here’s what the community is looking forward to.</p></div>
         {content.events.length > 0 ? <div className="event-list">{content.events.map((event, index) => <article className="event-row" key={event.id} data-testid={`card-event-${event.id}`}><span className="event-no">0{index + 1}</span><div className="event-main"><h3>{event.title}</h3><p>{event.description}</p></div><div className="event-time"><span className="section-kicker">WHEN</span><span>{event.time}</span></div>{event.reward && <div className="event-reward"><span className="section-kicker">BRING BACK</span><span>{event.reward}</span></div>}<ArrowRight size={17} /></article>)}</div> : <EmptyBlock icon={<Compass />} title="No gatherings on the map just yet." body="When the next community event is planned, you’ll find it here." />}
       </section>
       }
 
-      {page === 'punishments' && <section className="consequences">
+      {page === 'punishments' && <section className="consequences reveal-in">
         <div className="consequence-title"><span className="section-kicker">FAIR PLAY, CLEAR EXPECTATIONS</span><h2>Every world<br />needs a <em>boundary.</em></h2><p>When things go sideways, our moderation team handles it with care and consistency.</p></div>
         {content.punishments.length > 0 ? <div className="punishment-list">{content.punishments.map((item, i) => <article key={item.id} className="punishment-item" data-testid={`text-punishment-${item.id}`}><span>0{i + 1}</span><div><h3>{item.title}</h3><DiscordText text={item.description} /></div></article>)}</div> : <div className="punishment-empty"><Shield size={22} /><p>Punishment schedules will be posted here when available.</p></div>}
       </section>
@@ -345,7 +423,7 @@ function PublicSubmissionPage({ kind }: { kind: 'appeal' | 'application' }) {
   if (isLoading) return <CommunitySkeleton />;
   return <main className="community form-page">
     <div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div>
-    <header className="site-nav"><Brand /><nav className="nav-links form-nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/staff">Staff</Link><Link href="/rules">Rules</Link><Link href="/events">Events</Link><Link href="/punishments">Punishments</Link></nav><Link href="/join" className="nav-join">Join the world <ArrowRight size={15} /></Link><ThemeToggle /></header>
+     <CommunityHeader page={appeal ? 'appeal' : 'apply'} />
     {isError && <div className="fetch-notice" role="alert">The form details could not be reached. <button onClick={() => refetch()}>Try again</button></div>}
     <section className="submission-layout reveal-in">
       <div className="submission-aside">
@@ -372,7 +450,7 @@ function PublicSubmissionPage({ kind }: { kind: 'appeal' | 'application' }) {
 function PluginPage() {
   const { data, isLoading, isError, refetch } = useGetLegendsContent();
   if (isLoading) return <CommunitySkeleton />;
-  return <main className="community form-page"><div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div><header className="site-nav"><Brand /><nav className="nav-links form-nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/staff">Staff</Link><Link href="/rules">Rules</Link><Link href="/events">Events</Link><Link href="/punishments">Punishments</Link></nav><Link href="/join" className="nav-join">Join the world <ArrowRight size={15} /></Link><ThemeToggle /></header>
+  return <main className="community form-page"><div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div><CommunityHeader page="plugin" />
     {isError && <div className="fetch-notice" role="alert">Plugin details could not be reached. <button onClick={() => refetch()}>Try again</button></div>}
     <section className="plugin-page reveal-in"><div className="plugin-intro"><span className="section-kicker">TOOLS THAT SUPPORT THE WORLD</span><h1>How we<br /><em>play.</em></h1><p>Helpful details for getting started, shared by the people who play here.</p><Link href="/join" className="button button-dark">Find your way in <ArrowRight size={15} /></Link></div><article className="plugin-content"><div className="plugin-content-head"><span className="section-kicker">LEGENDS SMP / SERVER NOTES</span><span>COMMUNITY GUIDE</span></div>{data?.pluginInfo?.trim() ? <DiscordText text={data.pluginInfo} /> : <div className="plugin-empty"><Compass size={24} /><h2>Details are being gathered.</h2><p>Server notes will be shared here as the community settles in.</p></div>}<div className="plugin-signoff">KEEP IT KIND <span>·</span> KEEP IT CURIOUS</div></article></section>
     <footer className="site-footer"><Brand dark /><p>Take care of the world.<br />Take care of each other.</p><div className="footer-links"><span>BUILT FOR THE LONG GAME</span><Link href="/appeal">Ban appeals <ArrowRight size={13} /></Link><Link href="/apply">Staff applications <ArrowRight size={13} /></Link></div><span className="copyright">LEGENDS SMP · SURVIVE TOGETHER</span></footer></main>;
