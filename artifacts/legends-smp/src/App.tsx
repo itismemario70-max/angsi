@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import {
   ArrowDownRight, ArrowRight, Check, ChevronDown, Compass, Copy, ExternalLink,
   Eye, EyeOff, KeyRound, Leaf, LockKeyhole, LogOut, Menu, Plus, Save, Shield,
-  ShieldCheck, Swords, Trash2, Users, X,
+  ShieldCheck, Swords, Trash2, Users, X, Sun, Moon,
 } from 'lucide-react';
 import {
   getGetLegendsContentQueryKey, getGetLegendsSessionQueryKey, useGetLegendsContent,
@@ -36,6 +36,11 @@ function Router() {
     <ErrorBoundary resetKey={location}>
       <Switch>
         <Route path="/" component={CommunityHome} />
+        <Route path="/staff" component={CommunityHome} />
+        <Route path="/rules" component={CommunityHome} />
+        <Route path="/events" component={CommunityHome} />
+        <Route path="/punishments" component={CommunityHome} />
+        <Route path="/join" component={CommunityHome} />
         <Route path="/admin">{() => <ManagementPanel panel="admin" />}</Route>
         <Route path="/owner">{() => <ManagementPanel panel="owner" />}</Route>
         <Route component={NotFound} />
@@ -146,8 +151,11 @@ function DiscordText({ text }: { text: string }) {
 function CommunityHome() {
   const { data, isLoading, isError, refetch } = useGetLegendsContent();
   const content = data ?? emptyContent;
+  const [location, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showAllStaff, setShowAllStaff] = useState(false);
+  const page = location === '/' ? 'home' : location.slice(1);
   const copyAddress = async () => {
     if (!content.serverIp) return;
     try {
@@ -158,28 +166,26 @@ function CommunityHome() {
       setCopied(false);
     }
   };
-  const jump = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    setMobileOpen(false);
-  };
-
   if (isLoading) return <CommunitySkeleton />;
   return (
     <main className="community">
       <div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div>
       <header className="site-nav">
         <Brand />
-        <nav className={mobileOpen ? 'nav-links nav-open' : 'nav-links'} aria-label="Main navigation">
-          <button onClick={() => jump('world')} data-testid="link-world">The world</button>
-          <button onClick={() => jump('people')} data-testid="link-staff">Our people</button>
-          <button onClick={() => jump('charter')} data-testid="link-rules">The charter</button>
-          <button onClick={() => jump('calendar')} data-testid="link-events">Gatherings</button>
+        <nav id="public-navigation" className={mobileOpen ? 'nav-links nav-open' : 'nav-links'} aria-label="Main navigation">
+          <Link href="/" aria-current={page === 'home' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-world">Home</Link>
+          <Link href="/staff" aria-current={page === 'staff' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-staff">Staff</Link>
+          <Link href="/rules" aria-current={page === 'rules' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-rules">Rules</Link>
+          <Link href="/events" aria-current={page === 'events' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-events">Events</Link>
+          <Link href="/punishments" aria-current={page === 'punishments' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-punishments">Punishments</Link>
         </nav>
-        <button className="nav-join" onClick={() => jump('join')} data-testid="button-join-nav">Join the world <ArrowRight size={15} /></button>
-        <button className="mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? 'Close menu' : 'Open menu'} data-testid="button-mobile-menu">{mobileOpen ? <X /> : <Menu />}</button>
+        <Link href="/join" className="nav-join" onClick={() => setMobileOpen(false)} data-testid="button-join-nav">Join the world <ArrowRight size={15} /></Link>
+        <ThemeToggle />
+        <button className="mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileOpen} aria-controls="public-navigation" data-testid="button-mobile-menu">{mobileOpen ? <X /> : <Menu />}</button>
       </header>
       {isError && <div className="fetch-notice" role="alert">The world details could not be reached. <button onClick={() => refetch()} data-testid="button-retry-content">Try again</button></div>}
 
+      {(page === 'home') && <>
       <section className="hero" id="world">
         <div className="hero-art" aria-hidden="true">
           <div className="sun-disc" />
@@ -196,15 +202,16 @@ function CommunityHome() {
           <h1>Make a little<br /><em>legend.</em></h1>
           <p className="hero-copy">A survival world shaped by the people in it. Build something that lasts, find your crew, and leave your mark on the map.</p>
           <div className="hero-actions">
-            <button className="button button-gold" onClick={() => jump('join')} data-testid="button-start-adventure">Find your way in <ArrowDownRight size={17} /></button>
-            <button className="text-action" onClick={() => jump('people')} data-testid="button-meet-community">Meet the community <ArrowRight size={15} /></button>
+            <button className="button button-gold" onClick={() => setLocation('/join')} data-testid="button-start-adventure">Find your way in <ArrowDownRight size={17} /></button>
+            <button className="text-action" onClick={() => setLocation('/staff')} data-testid="button-meet-community">Meet the community <ArrowRight size={15} /></button>
           </div>
           <div className="hero-note"><span className="note-rule" /> A PLACE FOR THE LONG GAME <span className="note-separator">/</span> EST. IN THE OVERWORLD</div>
         </div>
         <div className="hero-index"><span>01</span><span className="index-line" /> THE OVERWORLD</div>
       </section>
+      </>}
 
-      <section className="world-strip" id="join">
+      {page === 'join' && <section className="world-strip" id="join">
         <div className="strip-intro"><span className="section-kicker">YOUR WAY IN</span><h2>Same horizon.<br /><span>New story.</span></h2></div>
         <div className="connect-panel">
           <div className="connect-top"><div><span className="section-kicker">CURRENT SEASON</span><h3 data-testid="text-season">{content.season || 'Awaiting the next chapter'}</h3></div><span className="season-stamp"><Leaf size={17} /> SEASON</span></div>
@@ -226,34 +233,38 @@ function CommunityHome() {
           </div>
         </div>
       </section>
+      }
 
-      <section className="manifesto" id="people">
+      {page === 'home' && <section className="manifesto" id="people">
         <div className="manifesto-number">01 <span>—</span> 04</div>
         <div className="manifesto-body">
           <span className="section-kicker">MORE THAN A SPAWN POINT</span>
           <h2>It’s not about<br />the <span>blocks.</span></h2>
         </div>
-        <div className="manifesto-copy"><p>It’s the road between bases. The town that grew out of nowhere. The friend who stayed up late to finish the roof.</p><p>Legends is an independent survival community where the best things happen when nobody’s rushing to the end.</p><button className="inline-link" onClick={() => jump('charter')} data-testid="button-read-charter">Read our charter <ArrowRight size={15} /></button></div>
+        <div className="manifesto-copy"><p>It’s the road between bases. The town that grew out of nowhere. The friend who stayed up late to finish the roof.</p><p>Legends is an independent survival community where the best things happen when nobody’s rushing to the end.</p><button className="inline-link" onClick={() => setLocation('/rules')} data-testid="button-read-charter">Read our charter <ArrowRight size={15} /></button></div>
         <div className="manifesto-seal"><Swords size={28} strokeWidth={1.2} /><span>BUILD<br />WITH PURPOSE</span></div>
       </section>
+      }
 
-      <section className="people-section content-section">
+      {(page === 'home' || page === 'staff') && <section className="people-section content-section">
         <div className="section-heading">
           <div><span className="section-kicker">THE PEOPLE BEHIND THE WORLD</span><h2>Keepers of<br /><em>the realm.</em></h2></div>
           <p>Good worlds don’t run themselves. Meet the folks who keep this one welcoming, fair, and running smoothly.</p>
         </div>
         {content.staff.length > 0 ? (
           <div className="staff-grid">
-            {content.staff.map((member, index) => <article className={`staff-card staff-tone-${index % 3}`} key={member.id} data-testid={`card-staff-${member.id}`}>
+            {(page === 'home' && !showAllStaff ? content.staff.slice(0, 3) : content.staff).map((member, index) => <article className={`staff-card staff-tone-${index % 3}`} key={member.id} data-testid={`card-staff-${member.id}`}>
               <SkinPortrait member={member} />
               <div className="staff-info"><h3>{member.displayName || member.minecraftUsername}</h3><div className="staff-meta"><span>{member.minecraftUsername}</span>{member.inGameStaff && <span className="game-tag"><span /> IN-GAME</span>}</div>{member.discordUsername && <div className="staff-discord">DISCORD <span>{member.discordUsername}</span></div>}</div>
               <span className="staff-index">0{index + 1}</span>
             </article>)}
           </div>
         ) : <EmptyBlock icon={<Users />} title="The roster is being written." body="Our community team will introduce themselves here soon." />}
+        {page === 'home' && content.staff.length > 3 && <button className="button button-dark staff-more" onClick={() => setShowAllStaff(value => !value)} aria-expanded={showAllStaff} data-testid="button-show-more-staff">{showAllStaff ? 'Show fewer staff' : 'Show more staff'} <ArrowRight size={15} /></button>}
       </section>
+      }
 
-      <section className="charter-section" id="charter">
+      {page === 'rules' && <section className="charter-section" id="charter">
         <div className="charter-heading"><div><span className="section-kicker">A FEW THINGS WE HOLD TRUE</span><h2>The <em>charter.</em></h2></div><span className="charter-mark"><ShieldCheck size={24} /> A GOOD WORLD<br />IS EVERYONE’S WORK</span></div>
         <div className="charter-layout">
           <div className="charter-aside"><span>KEEP IT KIND.<br />KEEP IT REAL.</span><div className="aside-rule" /><p>Simple promises.<br />Better adventures.</p></div>
@@ -261,16 +272,19 @@ function CommunityHome() {
         </div>
         <div className="charter-bottom"><span>THE WORLD IS BETTER WHEN EVERYONE BELONGS.</span><span>LEGENDS SMP <b>·</b> COMMUNITY CHARTER</span></div>
       </section>
+      }
 
-      <section className="gatherings content-section" id="calendar">
+      {page === 'events' && <section className="gatherings content-section" id="calendar">
         <div className="section-heading"><div><span className="section-kicker">THERE’S ALWAYS SOMETHING BREWING</span><h2>Meet me at<br /><em>the campfire.</em></h2></div><p>Good memories don’t schedule themselves. Here’s what the community is looking forward to.</p></div>
         {content.events.length > 0 ? <div className="event-list">{content.events.map((event, index) => <article className="event-row" key={event.id} data-testid={`card-event-${event.id}`}><span className="event-no">0{index + 1}</span><div className="event-main"><h3>{event.title}</h3><p>{event.description}</p></div><div className="event-time"><span className="section-kicker">WHEN</span><span>{event.time}</span></div>{event.reward && <div className="event-reward"><span className="section-kicker">BRING BACK</span><span>{event.reward}</span></div>}<ArrowRight size={17} /></article>)}</div> : <EmptyBlock icon={<Compass />} title="No gatherings on the map just yet." body="When the next community event is planned, you’ll find it here." />}
       </section>
+      }
 
-      <section className="consequences">
+      {page === 'punishments' && <section className="consequences">
         <div className="consequence-title"><span className="section-kicker">FAIR PLAY, CLEAR EXPECTATIONS</span><h2>Every world<br />needs a <em>boundary.</em></h2><p>When things go sideways, our moderation team handles it with care and consistency.</p></div>
         {content.punishments.length > 0 ? <div className="punishment-list">{content.punishments.map((item, i) => <article key={item.id} className="punishment-item" data-testid={`text-punishment-${item.id}`}><span>0{i + 1}</span><div><h3>{item.title}</h3><DiscordText text={item.description} /></div></article>)}</div> : <div className="punishment-empty"><Shield size={22} /><p>Punishment schedules will be posted here when available.</p></div>}
       </section>
+      }
 
       <footer className="site-footer">
         <Brand dark />
@@ -284,6 +298,18 @@ function CommunityHome() {
 
 function EmptyBlock({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return <div className="empty-block"><span className="empty-icon">{icon}</span><div><h3>{title}</h3><p>{body}</p></div></div>;
+}
+
+function ThemeToggle() {
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem('legends-theme') === 'dark'; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    try { localStorage.setItem('legends-theme', dark ? 'dark' : 'light'); } catch { /* storage may be unavailable */ }
+  }, [dark]);
+  return <button className="theme-toggle" type="button" onClick={() => setDark(value => !value)} aria-label={`Switch to ${dark ? 'light' : 'dark'} mode`} aria-pressed={dark} data-testid="button-theme-toggle">{dark ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}<span className="theme-label">{dark ? 'Light' : 'Dark'}</span></button>;
 }
 
 function CommunitySkeleton() {
@@ -388,7 +414,7 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
     <main className="panel-shell">
       <aside className="panel-rail"><Brand dark /><div className="rail-label">LEGENDS / MANAGEMENT</div><div className="rail-decoration"><Compass size={30} strokeWidth={1.1} /><span>THE<br />KEEPER’S<br />POST</span></div><div className="rail-footer"><span className="pulse-dot" /> PRIVATE AREA</div></aside>
       <div className="panel-main">
-        <header className="panel-topbar"><Link href="/" className="back-home" data-testid="link-back-home"><ArrowRight className="back-arrow" size={14} /> Community site</Link><div className="panel-top-right"><span className="secure-label"><LockKeyhole size={13} /> PROTECTED PANEL</span>{authorized && <button className="logout-button" onClick={doLogout} disabled={logout.isPending} data-testid="button-logout"><LogOut size={14} /> Sign out</button>}</div></header>
+        <header className="panel-topbar"><Link href="/" className="back-home" data-testid="link-back-home"><ArrowRight className="back-arrow" size={14} /> Community site</Link><div className="panel-top-right"><ThemeToggle /><span className="secure-label"><LockKeyhole size={13} /> PROTECTED PANEL</span>{authorized && <button className="logout-button" onClick={doLogout} disabled={logout.isPending} data-testid="button-logout"><LogOut size={14} /> Sign out</button>}</div></header>
         {!authorized ? <section className="login-wrap">
           <div className="login-index"><span>LEGENDS SMP</span><span>01 / ACCESS</span></div>
           <div className="login-card">

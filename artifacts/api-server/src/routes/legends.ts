@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   db,
   legendsSettingsTable,
@@ -25,6 +25,7 @@ const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const LOCKOUT_MS = 10 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 6;
 const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+let settingsTableReady: Promise<void> | undefined;
 
 type PanelRole = "admin" | "owner";
 type SessionPayload = {
@@ -73,6 +74,29 @@ async function matchesCode(code: string, storedHash: string): Promise<boolean> {
 }
 
 async function getSettings() {
+  if (!settingsTableReady) {
+    settingsTableReady = db
+      .execute(
+        sql.raw(`
+          CREATE TABLE IF NOT EXISTS public.legends_settings (
+            id text PRIMARY KEY,
+            content jsonb NOT NULL,
+            admin_code_hash text NOT NULL,
+            owner_code_hash text NOT NULL,
+            admin_version integer NOT NULL DEFAULT 1,
+            owner_version integer NOT NULL DEFAULT 1,
+            updated_at timestamptz NOT NULL DEFAULT now()
+          )
+        `),
+      )
+      .then(() => undefined)
+      .catch((error) => {
+        settingsTableReady = undefined;
+        throw error;
+      });
+  }
+  await settingsTableReady;
+
   const existing = await db
     .select()
     .from(legendsSettingsTable)
