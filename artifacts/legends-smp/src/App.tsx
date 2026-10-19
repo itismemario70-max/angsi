@@ -1,16 +1,19 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDownRight, ArrowRight, Check, ChevronDown, Compass, Copy, ExternalLink,
+  ArrowDownRight, ArrowRight, Check, ChevronDown, Compass, Copy, ExternalLink, Upload,
   Eye, EyeOff, KeyRound, Leaf, LockKeyhole, LogOut, Menu, Plus, Save, Shield,
   ShieldCheck, Swords, Trash2, Users, X, Sun, Moon,
 } from 'lucide-react';
 import {
-  getGetLegendsContentQueryKey, getGetLegendsSessionQueryKey, useGetLegendsContent,
+  getGetLegendsContentQueryKey, getGetLegendsSessionQueryKey, getGetBanAppealsQueryKey,
+  getGetStaffApplicationsQueryKey, useGetLegendsContent,
   useGetLegendsSession, useLoginLegendsPanel, useLogoutLegendsPanel,
-  useUpdateLegendsCodes, useUpdateLegendsContent,
+  useUpdateLegendsCodes, useUpdateLegendsContent, useSubmitBanAppeal, useSubmitStaffApplication,
+  useGetBanAppeals, useUpdateBanAppealStatus, useGetStaffApplications,
+  useUpdateStaffApplicationStatus, useRequestStaffSkinUpload, useFinalizeStaffSkinUpload,
 } from '@workspace/api-client-react';
-import type { SiteContentInput } from '@workspace/api-client-react';
+import type { SiteContentInput, CommunityFormSubmission, FormQuestion } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -28,6 +31,7 @@ type CollectionItem = DiscordLink | Staff | Rule | Punishment | Event;
 
 const emptyContent: SiteContentInput = {
   serverIp: '', season: '', discordLinks: [], staff: [], rules: [], punishments: [], events: [],
+  banAppealsEnabled: false, banAppealQuestions: [], staffApplicationQuestions: [], pluginInfo: '',
 };
 
 function Router() {
@@ -41,6 +45,9 @@ function Router() {
         <Route path="/events" component={CommunityHome} />
         <Route path="/punishments" component={CommunityHome} />
         <Route path="/join" component={CommunityHome} />
+        <Route path="/appeal">{() => <PublicSubmissionPage kind="appeal" />}</Route>
+        <Route path="/apply">{() => <PublicSubmissionPage kind="application" />}</Route>
+        <Route path="/plugin" component={PluginPage} />
         <Route path="/admin">{() => <ManagementPanel panel="admin" />}</Route>
         <Route path="/owner">{() => <ManagementPanel panel="owner" />}</Route>
         <Route component={NotFound} />
@@ -61,11 +68,7 @@ function Brand({ dark = false }: { dark?: boolean }) {
 function SkinPortrait({ member }: { member: Staff }) {
   const [failed, setFailed] = useState(false);
   const username = member.minecraftUsername.trim();
-  const source =
-    member.skinUrl?.trim() ||
-    (username
-      ? `https://mc-heads.net/body/${encodeURIComponent(username)}/100`
-      : "");
+  const source = member.skinUrl?.trim() || "";
   useEffect(() => setFailed(false), [source]);
 
   return (
@@ -178,6 +181,11 @@ function CommunityHome() {
           <Link href="/rules" aria-current={page === 'rules' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-rules">Rules</Link>
           <Link href="/events" aria-current={page === 'events' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-events">Events</Link>
           <Link href="/punishments" aria-current={page === 'punishments' ? 'page' : undefined} onClick={() => setMobileOpen(false)} data-testid="link-punishments">Punishments</Link>
+          {page !== 'home' && <>
+            <Link href="/plugin" onClick={() => setMobileOpen(false)}>Plugin info</Link>
+            <Link href="/apply" onClick={() => setMobileOpen(false)}>Apply for staff</Link>
+            {content.banAppealsEnabled && <Link href="/appeal" onClick={() => setMobileOpen(false)}>Ban appeal</Link>}
+          </>}
         </nav>
         <Link href="/join" className="nav-join" onClick={() => setMobileOpen(false)} data-testid="button-join-nav">Join the world <ArrowRight size={15} /></Link>
         <ThemeToggle />
@@ -296,6 +304,80 @@ function CommunityHome() {
   );
 }
 
+const fallbackAppealQuestions: FormQuestion[] = [
+  { id: 'appeal-context', label: 'What happened from your perspective?', required: true },
+  { id: 'appeal-change', label: 'What would you do differently if welcomed back?', required: true },
+];
+const fallbackApplicationQuestions: FormQuestion[] = [
+  { id: 'application-intro', label: 'Tell us a little about yourself and your time in the community.', required: true },
+  { id: 'application-care', label: 'How would you help keep Legends welcoming and fair?', required: true },
+];
+
+function PublicSubmissionPage({ kind }: { kind: 'appeal' | 'application' }) {
+  const { data, isLoading, isError, refetch } = useGetLegendsContent();
+  const submitAppeal = useSubmitBanAppeal();
+  const submitApplication = useSubmitStaffApplication();
+  const appeal = kind === 'appeal';
+  const questions = appeal ? (data?.banAppealQuestions ?? fallbackAppealQuestions) : (data?.staffApplicationQuestions ?? fallbackApplicationQuestions);
+  const [sent, setSent] = useState(false);
+  const [failure, setFailure] = useState('');
+  const [busy, setBusy] = useState(false);
+  const disabled = appeal && data?.banAppealsEnabled === false;
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFailure('');
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      minecraftUsername: String(form.get('minecraftUsername') || '').trim(),
+      discordUsername: String(form.get('discordUsername') || '').trim(),
+      answers: questions.map(question => ({ questionId: question.id, answer: String(form.get(question.id) || '').trim() })),
+    };
+    setBusy(true);
+    try {
+      if (appeal) await submitAppeal.mutateAsync({ data: payload });
+      else await submitApplication.mutateAsync({ data: payload });
+      setSent(true);
+      event.currentTarget.reset();
+    } catch {
+      setFailure('We couldn’t send this just now. Your answers are still here; please try again.');
+    } finally { setBusy(false); }
+  };
+  if (isLoading) return <CommunitySkeleton />;
+  return <main className="community form-page">
+    <div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div>
+    <header className="site-nav"><Brand /><nav className="nav-links form-nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/staff">Staff</Link><Link href="/rules">Rules</Link><Link href="/events">Events</Link><Link href="/punishments">Punishments</Link></nav><Link href="/join" className="nav-join">Join the world <ArrowRight size={15} /></Link><ThemeToggle /></header>
+    {isError && <div className="fetch-notice" role="alert">The form details could not be reached. <button onClick={() => refetch()}>Try again</button></div>}
+    <section className="submission-layout reveal-in">
+      <div className="submission-aside">
+        <span className="section-kicker">{appeal ? 'A WAY BACK TO THE WORLD' : 'HELP SHAPE WHAT COMES NEXT'}</span>
+        <h1>{appeal ? <>A second<br /><em>chapter.</em></> : <>Make room<br />for your <em>story.</em></>}</h1>
+        <p>{appeal ? 'We know people can grow. Share your perspective and our moderation team will review your appeal with care.' : 'Good communities are built by people who show up for one another. Tell us how you might help.'}</p>
+        <div className="submission-note"><span className="note-rule" /> READ BY THE LEGENDS TEAM <span>/</span> {appeal ? 'ONE APPEAL AT A TIME' : 'THOUGHTFUL PEOPLE WELCOME'}</div>
+        <Link href={appeal ? '/apply' : '/appeal'} className="form-switch">{appeal ? 'Interested in joining the team?' : 'Need to appeal a ban?'} <span>{appeal ? 'Apply here' : 'Start an appeal'} <ArrowRight size={14} /></span></Link>
+      </div>
+      <div className="submission-card">
+        <div className="submission-card-head"><div><span className="section-kicker">{appeal ? 'BAN APPEAL' : 'STAFF APPLICATION'} / PRIVATE SUBMISSION</span><h2>{appeal ? 'Tell us what happened.' : 'Let’s get to know you.'}</h2></div><span className="form-index">01<br />—<br />04</span></div>
+        {disabled ? <div className="form-closed"><span className="closed-mark"><LockKeyhole size={20} /></span><h3>Appeals are paused for now.</h3><p>Our team is not accepting new appeals at the moment. Please check back later.</p><Link href="/" className="button button-dark">Back to Legends <ArrowRight size={15} /></Link></div> : sent ? <div className="form-success"><span className="success-mark"><Check size={23} /></span><span className="section-kicker">RECEIVED BY THE TEAM</span><h3>Your words are with us.</h3><p>Thank you for taking the time to write. The team will review your {appeal ? 'appeal' : 'application'} as soon as they can.</p><button className="button button-dark" onClick={() => setSent(false)}>Send another response <ArrowRight size={15} /></button></div> : <form className="community-form" onSubmit={onSubmit}>
+          <div className="form-identity"><label>MINECRAFT USERNAME<input name="minecraftUsername" required autoComplete="username" maxLength={32} placeholder="Your in-game name" /></label><label>DISCORD USERNAME<input name="discordUsername" required maxLength={80} placeholder="name or name#0000" /></label></div>
+          {questions.map((question, index) => <label className="question-field" key={question.id}><span><b>{String(index + 1).padStart(2, '0')}</b>{question.label}{question.required && <i>REQUIRED</i>}</span><textarea name={question.id} rows={4} required={question.required} maxLength={4000} placeholder="Take your time. A little context helps." /></label>)}
+          {failure && <p className="form-error" role="alert">{failure}</p>}
+          <div className="submit-form-bottom"><span>Your details are only shared with the Legends team.</span><button type="submit" className="button button-dark" disabled={busy}>{busy ? 'Sending…' : 'Send to the team'} <ArrowRight size={15} /></button></div>
+        </form>}
+      </div>
+    </section>
+    <footer className="site-footer"><Brand dark /><p>Take care of the world.<br />Take care of each other.</p><div className="footer-links"><span>BUILT FOR THE LONG GAME</span><Link href="/admin">Staff access <ArrowRight size={13} /></Link><Link href="/owner">Owner access <ArrowRight size={13} /></Link></div><span className="copyright">LEGENDS SMP · SURVIVE TOGETHER</span></footer>
+  </main>;
+}
+
+function PluginPage() {
+  const { data, isLoading, isError, refetch } = useGetLegendsContent();
+  if (isLoading) return <CommunitySkeleton />;
+  return <main className="community form-page"><div className="topline"><span><span className="pulse-dot" /> A WORLD BUILT TOGETHER</span><span className="topline-right">JAVA SURVIVAL · COMMUNITY FIRST</span></div><header className="site-nav"><Brand /><nav className="nav-links form-nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/staff">Staff</Link><Link href="/rules">Rules</Link><Link href="/events">Events</Link><Link href="/punishments">Punishments</Link></nav><Link href="/join" className="nav-join">Join the world <ArrowRight size={15} /></Link><ThemeToggle /></header>
+    {isError && <div className="fetch-notice" role="alert">Plugin details could not be reached. <button onClick={() => refetch()}>Try again</button></div>}
+    <section className="plugin-page reveal-in"><div className="plugin-intro"><span className="section-kicker">TOOLS THAT SUPPORT THE WORLD</span><h1>How we<br /><em>play.</em></h1><p>Helpful details for getting started, shared by the people who play here.</p><Link href="/join" className="button button-dark">Find your way in <ArrowRight size={15} /></Link></div><article className="plugin-content"><div className="plugin-content-head"><span className="section-kicker">LEGENDS SMP / SERVER NOTES</span><span>COMMUNITY GUIDE</span></div>{data?.pluginInfo?.trim() ? <DiscordText text={data.pluginInfo} /> : <div className="plugin-empty"><Compass size={24} /><h2>Details are being gathered.</h2><p>Server notes will be shared here as the community settles in.</p></div>}<div className="plugin-signoff">KEEP IT KIND <span>·</span> KEEP IT CURIOUS</div></article></section>
+    <footer className="site-footer"><Brand dark /><p>Take care of the world.<br />Take care of each other.</p><div className="footer-links"><span>BUILT FOR THE LONG GAME</span><Link href="/appeal">Ban appeals <ArrowRight size={13} /></Link><Link href="/apply">Staff applications <ArrowRight size={13} /></Link></div><span className="copyright">LEGENDS SMP · SURVIVE TOGETHER</span></footer></main>;
+}
+
 function EmptyBlock({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return <div className="empty-block"><span className="empty-icon">{icon}</span><div><h3>{title}</h3><p>{body}</p></div></div>;
 }
@@ -318,7 +400,7 @@ function CommunitySkeleton() {
 
 const collectionMeta: Record<CollectionKey, { label: string; plural: string; fields: { key: string; label: string; multiline?: boolean; boolean?: boolean }[] }> = {
   discordLinks: { label: 'Community link', plural: 'Community links', fields: [{ key: 'label', label: 'Label' }, { key: 'url', label: 'Destination URL' }] },
-  staff: { label: 'Staff member', plural: 'Staff roster', fields: [{ key: 'minecraftUsername', label: 'Minecraft username' }, { key: 'displayName', label: 'Display name' }, { key: 'rank', label: 'Rank' }, { key: 'discordUsername', label: 'Discord username' }, { key: 'skinUrl', label: 'Skin image URL' }, { key: 'inGameStaff', label: 'In-game staff', boolean: true }] },
+  staff: { label: 'Staff member', plural: 'Staff roster', fields: [{ key: 'minecraftUsername', label: 'Minecraft username' }, { key: 'displayName', label: 'Display name' }, { key: 'rank', label: 'Rank' }, { key: 'discordUsername', label: 'Discord username' }, { key: 'skinUrl', label: 'Staff image' }, { key: 'inGameStaff', label: 'In-game staff', boolean: true }] },
   rules: { label: 'Rule', plural: 'Community rules', fields: [{ key: 'title', label: 'Rule title' }, { key: 'body', label: 'Rule text (Discord Markdown)', multiline: true }] },
   punishments: { label: 'Punishment set', plural: 'Punishments', fields: [{ key: 'title', label: 'Season / punishment title' }, { key: 'description', label: 'Punishments and details', multiline: true }] },
   events: { label: 'Gathering', plural: 'Community events', fields: [{ key: 'title', label: 'Event name' }, { key: 'time', label: 'When' }, { key: 'description', label: 'What to expect', multiline: true }, { key: 'reward', label: 'Reward / bring back' }] },
@@ -342,6 +424,8 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
   const logout = useLogoutLegendsPanel();
   const updateContent = useUpdateLegendsContent();
   const updateCodes = useUpdateLegendsCodes();
+  const requestSkinUpload = useRequestStaffSkinUpload();
+  const finalizeSkinUpload = useFinalizeStaffSkinUpload();
   const authorized = !!session?.authenticated && (panel === 'admin' ? session.role === 'admin' || session.role === 'owner' : session.role === 'owner');
   const [loginCode, setLoginCode] = useState('');
   const [loginVisible, setLoginVisible] = useState(false);
@@ -352,11 +436,12 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
   const [adminCode, setAdminCode] = useState('');
   const [ownerCode, setOwnerCode] = useState('');
   const [showCodes, setShowCodes] = useState(false);
+  const [skinFiles, setSkinFiles] = useState<Record<string, File>>({});
   useEffect(() => {
     if (contentData) setContent(contentData);
   }, [contentData]);
   const list = content[selected] as CollectionItem[];
-  const dirty = useMemo(() => JSON.stringify(content) !== JSON.stringify(contentData ?? emptyContent), [content, contentData]);
+  const dirty = useMemo(() => JSON.stringify(content) !== JSON.stringify(contentData ?? emptyContent) || Object.keys(skinFiles).length > 0, [content, contentData, skinFiles]);
 
   const performLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -377,7 +462,17 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
   const saveContent = async () => {
     setSaveMessage('');
     try {
-      await updateContent.mutateAsync({ data: content });
+      let nextContent = content;
+      for (const [staffId, file] of Object.entries(skinFiles)) {
+        const requested = await requestSkinUpload.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type as 'image/png' | 'image/jpeg' | 'image/webp' } });
+        const upload = await fetch(requested.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+        if (!upload.ok) throw new Error('Image upload failed');
+        const finalized = await finalizeSkinUpload.mutateAsync({ data: { objectPath: requested.objectPath } });
+        nextContent = { ...nextContent, staff: nextContent.staff.map(member => member.id === staffId ? { ...member, skinUrl: finalized.imagePath } : member) };
+      }
+      setContent(nextContent);
+      await updateContent.mutateAsync({ data: nextContent });
+      setSkinFiles({});
       await queryClient.invalidateQueries({ queryKey: getGetLegendsContentQueryKey() });
       setSaveMessage('Changes saved to the community site.');
     } catch {
@@ -450,9 +545,20 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
               {contentError ? <div className="editor-error" role="alert"><span>Could not load public content.</span><button onClick={() => retryContent()} data-testid="button-retry-editor">Retry loading</button></div> : contentLoading ? <div className="editor-skeleton"><i /><i /><i /></div> : (
                 <>
                   <div className="core-fields"><label>SERVER ADDRESS<input data-testid="input-server-ip" value={content.serverIp} onChange={e => setContent(prev => ({ ...prev, serverIp: e.target.value }))} placeholder="Your Minecraft server address" /></label><label>CURRENT SEASON<input data-testid="input-season" value={content.season} onChange={e => setContent(prev => ({ ...prev, season: e.target.value }))} placeholder="The name of the current season" /></label></div>
+                  {panel === 'admin' && <section className="form-settings admin-form-settings">
+                    <div className="settings-title"><div><span className="section-kicker">ADMIN / COMMUNITY CARE</span><h3>Ban appeals</h3><p>Choose whether players can submit an appeal, and keep the questions clear.</p></div><label className="appeals-switch"><input type="checkbox" checked={content.banAppealsEnabled} onChange={e => setContent(prev => ({ ...prev, banAppealsEnabled: e.target.checked }))} /><span>{content.banAppealsEnabled ? 'Accepting appeals' : 'Appeals paused'}</span></label></div>
+                    <QuestionEditor title="Appeal questions" questions={content.banAppealQuestions} onChange={questions => setContent(prev => ({ ...prev, banAppealQuestions: questions }))} />
+                  </section>}
+                  {panel === 'owner' && <section className="form-settings owner-form-settings">
+                    <div className="settings-title"><div><span className="section-kicker">OWNER / COMMUNITY INTAKE</span><h3>Staff applications</h3><p>Shape the questions players see when they apply to help the realm.</p></div></div>
+                    <QuestionEditor title="Application questions" questions={content.staffApplicationQuestions} onChange={questions => setContent(prev => ({ ...prev, staffApplicationQuestions: questions }))} />
+                    <label className="plugin-editor-label">PLUGIN & SERVER INFORMATION <small>Discord-style formatting: **bold**, *italic*, &gt; quote, - list, `code`</small><textarea className="plugin-editor" rows={10} value={content.pluginInfo} onChange={e => setContent(prev => ({ ...prev, pluginInfo: e.target.value }))} placeholder={'**A few notes before you join**\\n- Java Edition\\n> Be kind to the world and each other'} /></label>
+                  </section>}
+                  {panel === 'admin' && <AppealReviews />}
+                  {panel === 'owner' && <ApplicationReviews />}
                   <div className="editor-tabs" role="tablist">{(Object.keys(collectionMeta) as CollectionKey[]).map(key => <button key={key} role="tab" aria-selected={selected === key} className={selected === key ? 'editor-tab active-tab' : 'editor-tab'} onClick={() => setSelected(key)} data-testid={`tab-${key}`}><span>{collectionMeta[key].plural}</span><b>{content[key].length}</b></button>)}</div>
                   <div className="collection-head"><div><span className="section-kicker">{collectionMeta[selected].plural.toUpperCase()}</span><span className="collection-count">{list.length} {list.length === 1 ? 'entry' : 'entries'}</span></div><button className="add-entry" onClick={addItem} data-testid={`button-add-${selected}`}><Plus size={15} /> Add {collectionMeta[selected].label.toLowerCase()}</button></div>
-                  {list.length === 0 ? <div className="editor-empty"><span className="empty-icon"><Plus size={19} /></span><div><h3>Nothing here yet.</h3><p>Add the first {collectionMeta[selected].label.toLowerCase()} to publish it on the community site.</p></div></div> : <div className="entry-list">{list.map((item, index) => <article className="entry-card" key={item.id} data-testid={`editor-entry-${selected}-${item.id}`}><div className="entry-card-head"><span><b>{String(index + 1).padStart(2, '0')}</b> {collectionMeta[selected].label}</span><button onClick={() => removeItem(item.id)} aria-label={`Remove ${collectionMeta[selected].label.toLowerCase()}`} data-testid={`button-remove-${selected}-${item.id}`}><Trash2 size={15} /></button></div><div className="entry-fields">{collectionMeta[selected].fields.map(field => field.boolean ? <label className="check-field" key={field.key}><input type="checkbox" checked={Boolean((item as unknown as Record<string, unknown>)[field.key])} onChange={e => patchItem(item.id, field.key, e.target.checked)} data-testid={`input-${selected}-${field.key}-${item.id}`} /><span>{field.label}</span></label> : <label key={field.key}>{field.label}{field.multiline ? <textarea value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} rows={3} /> : <input value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} />}</label>)}</div></article>)}</div>}
+                  {list.length === 0 ? <div className="editor-empty"><span className="empty-icon"><Plus size={19} /></span><div><h3>Nothing here yet.</h3><p>Add the first {collectionMeta[selected].label.toLowerCase()} to publish it on the community site.</p></div></div> : <div className="entry-list">{list.map((item, index) => <article className="entry-card" key={item.id} data-testid={`editor-entry-${selected}-${item.id}`}><div className="entry-card-head"><span><b>{String(index + 1).padStart(2, '0')}</b> {collectionMeta[selected].label}</span><button onClick={() => removeItem(item.id)} aria-label={`Remove ${collectionMeta[selected].label.toLowerCase()}`} data-testid={`button-remove-${selected}-${item.id}`}><Trash2 size={15} /></button></div><div className="entry-fields">{collectionMeta[selected].fields.map(field => field.key === 'skinUrl' && selected === 'staff' ? <StaffImageField key={field.key} member={item as Staff} file={skinFiles[item.id]} onFile={file => setSkinFiles(prev => ({ ...prev, [item.id]: file }))} /> : field.boolean ? <label className="check-field" key={field.key}><input type="checkbox" checked={Boolean((item as unknown as Record<string, unknown>)[field.key])} onChange={e => patchItem(item.id, field.key, e.target.checked)} data-testid={`input-${selected}-${field.key}-${item.id}`} /><span>{field.label}</span></label> : <label key={field.key}>{field.label}{field.multiline ? <textarea value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} rows={3} /> : <input value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} />}</label>)}</div></article>)}</div>}
                 </>
               )}
               {saveMessage && <p className={saveMessage.startsWith('Could') ? 'save-feedback save-error' : 'save-feedback'} role="status" data-testid="status-save-message"><Check size={14} />{saveMessage}</p>}
@@ -463,6 +569,57 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
       </div>
     </main>
   );
+}
+
+function QuestionEditor({ title, questions, onChange }: { title: string; questions: FormQuestion[]; onChange: (questions: FormQuestion[]) => void }) {
+  const [label, setLabel] = useState('');
+  const add = () => {
+    if (!label.trim()) return;
+    onChange([...questions, { id: `question-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label: label.trim(), required: true }]);
+    setLabel('');
+  };
+  return <div className="question-editor"><div className="question-editor-label"><span>{title}</span><span>{questions.length} {questions.length === 1 ? 'question' : 'questions'}</span></div>{questions.length ? questions.map((question, index) => <div className="managed-question" key={question.id}><span className="managed-question-number">{String(index + 1).padStart(2, '0')}</span><input aria-label={`Question ${index + 1}`} value={question.label} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, label: e.target.value } : item))} placeholder="Write a clear, welcoming question" /><label className="required-control"><input type="checkbox" checked={question.required} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, required: e.target.checked } : item))} />Required</label><button type="button" className="remove-question" aria-label={`Remove question ${index + 1}`} onClick={() => onChange(questions.filter(item => item.id !== question.id))}><X size={15} /></button></div>) : <p className="no-questions">No custom questions yet. Public forms will use the community starter questions until you add your own.</p>}<div className="add-question-row"><input value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder="Add a question for players" /><button type="button" className="button button-dark" onClick={add} disabled={!label.trim()}><Plus size={14} /> Add question</button></div></div>;
+}
+
+function StaffImageField({ member, file, onFile }: { member: Staff; file?: File; onFile: (file: File) => void }) {
+  const [invalid, setInvalid] = useState('');
+  const [localPreview, setLocalPreview] = useState('');
+  useEffect(() => {
+    if (!file) { setLocalPreview(''); return; }
+    const url = URL.createObjectURL(file);
+    setLocalPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const preview = localPreview || member.skinUrl || '';
+  return <div className="staff-image-editor"><span className="upload-label">STAFF IMAGE</span><div className="image-upload-control"><div className="staff-image-preview">{preview ? <img src={preview} alt={`${member.displayName || member.minecraftUsername || 'Staff'} image preview`} /> : <span>{(member.minecraftUsername || 'L').slice(0, 1).toUpperCase()}</span>}</div><div className="upload-prompt"><label className="upload-button"><Upload size={14} />{file ? 'Choose another image' : member.skinUrl ? 'Replace image' : 'Upload staff image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const picked = event.currentTarget.files?.[0]; if (!picked) return; if (!['image/png', 'image/jpeg', 'image/webp'].includes(picked.type) || picked.size > 5 * 1024 * 1024) { setInvalid('Choose a PNG, JPG, or WebP image up to 5 MB.'); event.currentTarget.value = ''; return; } setInvalid(''); onFile(picked); }} /></label><p>PNG, JPG, or WebP · up to 5 MB. Image uploads when you save.</p>{file && <span className="selected-file">{file.name}</span>}{invalid && <span className="upload-error" role="alert">{invalid}</span>}</div></div></div>;
+}
+
+function AppealReviews() {
+  const queryClient = useQueryClient();
+  const query = useGetBanAppeals();
+  const { data: content } = useGetLegendsContent();
+  const update = useUpdateBanAppealStatus();
+  const setStatus = async (submissionId: string, status: 'pending' | 'accepted' | 'declined') => {
+    await update.mutateAsync({ submissionId, data: { status } });
+    await queryClient.invalidateQueries({ queryKey: getGetBanAppealsQueryKey() });
+  };
+  return <ReviewSection title="Ban appeal inbox" kicker="ADMIN / PLAYER REVIEW" description="Read each account’s answers and record the next step." items={query.data} questions={content?.banAppealQuestions} loading={query.isLoading} error={query.isError} retry={() => query.refetch()} onStatus={setStatus} pendingId={update.variables?.submissionId} />;
+}
+
+function ApplicationReviews() {
+  const queryClient = useQueryClient();
+  const query = useGetStaffApplications();
+  const { data: content } = useGetLegendsContent();
+  const update = useUpdateStaffApplicationStatus();
+  const setStatus = async (submissionId: string, status: 'pending' | 'accepted' | 'declined') => {
+    await update.mutateAsync({ submissionId, data: { status } });
+    await queryClient.invalidateQueries({ queryKey: getGetStaffApplicationsQueryKey() });
+  };
+  return <ReviewSection title="Staff applications" kicker="OWNER / PEOPLE REVIEW" description="Thoughtful stewardship begins with listening. Review applications here." items={query.data} questions={content?.staffApplicationQuestions} loading={query.isLoading} error={query.isError} retry={() => query.refetch()} onStatus={setStatus} pendingId={update.variables?.submissionId} />;
+}
+
+function ReviewSection({ title, kicker, description, items, questions = [], loading, error, retry, onStatus, pendingId }: { title: string; kicker: string; description: string; items?: CommunityFormSubmission[]; questions?: FormQuestion[]; loading: boolean; error: boolean; retry: () => void; onStatus: (id: string, status: 'pending' | 'accepted' | 'declined') => void; pendingId?: string }) {
+  return <section className="review-section"><div className="review-head"><div><span className="section-kicker">{kicker}</span><h3>{title}</h3><p>{description}</p></div><span className="review-count">{items?.length ?? 0}<small>SUBMISSIONS</small></span></div>{error ? <div className="review-state error"><p>Submissions could not be loaded.</p><button type="button" onClick={retry}>Try again</button></div> : loading ? <div className="review-loading"><i /><i /><i /></div> : !items?.length ? <div className="review-state"><Compass size={20} /><p>No submissions to review yet. New responses will appear here.</p></div> : <div className="submission-list">{items.map((item, index) => <article className="review-card" key={item.id}><div className="review-card-top"><div><span className="review-number">{String(index + 1).padStart(2, '0')}</span><h4>{item.minecraftUsername}</h4><span className="review-discord">{item.discordUsername}</span></div><span className={`status-pill status-${item.status}`}>{item.status}</span></div><time>{new Date(item.createdAt).toLocaleString()}</time><div className="review-answers">{(item.answers ?? []).map((answer, i) => <div key={`${answer.questionId}-${i}`}><h5>{questions.find(question => question.id === answer.questionId)?.label || `Response ${i + 1}`}</h5><p>{answer.answer}</p></div>)}</div><div className="review-actions"><span>REVIEW STATUS</span><div>{(['pending', 'accepted', 'declined'] as const).map(status => <button key={status} type="button" className={item.status === status ? `status-choice selected ${status}` : 'status-choice'} disabled={pendingId === item.id} onClick={() => onStatus(item.id, status)}>{status[0].toUpperCase() + status.slice(1)}</button>)}</div></div></article>)}</div>}</section>;
 }
 
 function PanelLoading() {

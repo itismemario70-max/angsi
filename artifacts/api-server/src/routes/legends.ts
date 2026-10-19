@@ -1,22 +1,50 @@
-import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import {
+  createHmac,
+  randomBytes,
+  randomUUID,
+  scrypt,
+  timingSafeEqual,
+} from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   legendsSettingsTable,
+  legendsSubmissionsTable,
   type LegendsContent,
 } from "@workspace/db";
 import {
+  FinalizeStaffSkinUploadBody,
+  FinalizeStaffSkinUploadResponse,
+  GetBanAppealsResponse,
   GetLegendsContentResponse,
   GetLegendsSessionResponse,
+  GetStaffApplicationsResponse,
   LoginLegendsPanelBody,
   LoginLegendsPanelResponse,
   LogoutLegendsPanelResponse,
+  RequestStaffSkinUploadBody,
+  RequestStaffSkinUploadResponse,
+  SubmitBanAppealBody,
+  SubmitBanAppealResponse,
+  SubmitStaffApplicationBody,
+  SubmitStaffApplicationResponse,
+  UpdateBanAppealStatusBody,
+  UpdateBanAppealStatusParams,
+  UpdateBanAppealStatusResponse,
   UpdateLegendsCodesBody,
   UpdateLegendsCodesResponse,
   UpdateLegendsContentBody,
   UpdateLegendsContentResponse,
+  UpdateStaffApplicationStatusBody,
+  UpdateStaffApplicationStatusParams,
+  UpdateStaffApplicationStatusResponse,
 } from "@workspace/api-zod";
+import {
+  createSkinUploadUrl,
+  publishSkinImage,
+  readPublicSkin,
+} from "../lib/skinStorage";
 
 const router: IRouter = Router();
 const SETTINGS_ID = "legends";
@@ -25,6 +53,7 @@ const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const LOCKOUT_MS = 10 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 6;
 const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const submissionAttempts = new Map<string, { count: number; resetAt: number }>();
 let settingsTableReady: Promise<void> | undefined;
 
 type PanelRole = "admin" | "owner";
@@ -37,6 +66,16 @@ type SessionPayload = {
 const emptyContent: LegendsContent = {
   serverIp: "",
   season: "",
+  banAppealsEnabled: false,
+  banAppealQuestions: [
+    { id: "appeal-context", label: "What happened from your perspective?", required: true },
+    { id: "appeal-change", label: "What would you do differently if welcomed back?", required: true },
+  ],
+  staffApplicationQuestions: [
+    { id: "application-intro", label: "Tell us a little about yourself and your time in the community.", required: true },
+    { id: "application-care", label: "How would you help keep Legends welcoming and fair?", required: true },
+  ],
+  pluginInfo: "",
   discordLinks: [],
   staff: [],
   rules: [],
@@ -87,6 +126,17 @@ async function getSettings() {
             owner_version integer NOT NULL DEFAULT 1,
             updated_at timestamptz NOT NULL DEFAULT now()
           )
+          ;
+          CREATE TABLE IF NOT EXISTS public.legends_submissions (
+            id text PRIMARY KEY,
+            kind text NOT NULL CHECK (kind IN ('appeal', 'application')),
+            minecraft_username text NOT NULL,
+            discord_username text NOT NULL,
+            answers jsonb NOT NULL,
+            status text NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending', 'accepted', 'declined')),
+            created_at timestamptz NOT NULL DEFAULT now()
+          )
         `),
       )
       .then(() => undefined)
@@ -102,7 +152,15 @@ async function getSettings() {
     .from(legendsSettingsTable)
     .where(eq(legendsSettingsTable.id, SETTINGS_ID))
     .limit(1);
-  if (existing[0]) return existing[0];
+  if (existing[0]) {
+    return {
+      ...existing[0],
+      content: GetLegendsContentResponse.parse({
+        ...emptyContent,
+        ...(existing[0].content as Partial<LegendsContent>),
+      }),
+    };
+  }
 
   const adminCode = process.env.LEGENDS_ADMIN_CODE;
   const ownerCode = process.env.LEGENDS_OWNER_CODE;
@@ -206,7 +264,7 @@ function setSessionCookie(
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    path: "/api/legends",
+    path: "/api",
     maxAge: SESSION_TTL_SECONDS * 1000,
   });
 }
@@ -231,6 +289,264 @@ function getClientKey(request: Request): string {
 router.get("/legends/content", async (_request, response): Promise<void> => {
   const settings = await getSettings();
   response.json(GetLegendsContentResponse.parse(settings.content));
+});
+
+function allowSubmission(request: Request, form: "appeal" | "application") {
+  const key = `${form}:${getClientKey(request)}`;
+  const now = Date.now();
+  const previous = submissionAttempts.get(key);
+  if (!previous || previous.resetAt <= now) {
+    submissionAttempts.set(key, { count: 1, resetAt: now + 10 * 60 * 1000 });
+    return true;
+  }
+  if (previous.count >= 4) return false;
+  previous.count += 1;
+  return true;
+}
+
+function prepareAnswers(
+  questions: LegendsContent["banAppealQuestions"],
+  submitted: { questionId: string; answer: string }[],
+) {
+  if (submitted.length > questions.length) return null;
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const seen = new Set<string>();
+  const answers: { questionId: string; question: string; answer: string }[] = [];
+  for (const item of submitted) {
+    const question = byId.get(item.questionId);
+    const answer = item.answer.trim();
+    if (!question || seen.has(item.questionId) || answer.length > 5000) return null;
+    seen.add(item.questionId);
+    answers.push({ questionId: question.id, question: question.label, answer });
+  }
+  if (questions.some((question) => question.required && !seen.has(question.id))) {
+    return null;
+  }
+  return answers;
+}
+
+async function saveCommunitySubmission(
+  kind: "appeal" | "application",
+  request: Request,
+  response: Response,
+): Promise<void> {
+  if (!allowSubmission(request, kind)) {
+    response.status(429).json({ error: "Please wait before submitting again." });
+    return;
+  }
+  const parsed =
+    kind === "appeal"
+      ? SubmitBanAppealBody.safeParse(request.body)
+      : SubmitStaffApplicationBody.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ error: "Check the required form fields." });
+    return;
+  }
+  const { minecraftUsername, discordUsername } = parsed.data;
+  if (
+    !minecraftUsername.trim() ||
+    minecraftUsername.trim().length > 16 ||
+    !discordUsername.trim() ||
+    discordUsername.trim().length > 100
+  ) {
+    response.status(400).json({ error: "Check your Minecraft and Discord names." });
+    return;
+  }
+
+  const settings = await getSettings();
+  const content = settings.content;
+  if (kind === "appeal" && !content.banAppealsEnabled) {
+    response.status(400).json({ error: "Ban appeals are currently closed." });
+    return;
+  }
+  const questions =
+    kind === "appeal"
+      ? content.banAppealQuestions
+      : content.staffApplicationQuestions;
+  const answers = prepareAnswers(questions, parsed.data.answers);
+  if (!answers) {
+    response.status(400).json({ error: "Answer all required questions." });
+    return;
+  }
+  await db.insert(legendsSubmissionsTable).values({
+    id: randomUUID(),
+    kind,
+    minecraftUsername: minecraftUsername.trim(),
+    discordUsername: discordUsername.trim(),
+    answers,
+  });
+  response.status(201).json(
+    kind === "appeal"
+      ? SubmitBanAppealResponse.parse({ submitted: true })
+      : SubmitStaffApplicationResponse.parse({ submitted: true }),
+  );
+}
+
+router.post("/legends/appeals", async (request, response): Promise<void> => {
+  await saveCommunitySubmission("appeal", request, response);
+});
+
+router.post("/legends/applications", async (request, response): Promise<void> => {
+  await saveCommunitySubmission("application", request, response);
+});
+
+router.get("/legends/admin/appeals", async (request, response): Promise<void> => {
+  const settings = await getSettings();
+  const role = await getActiveRole(request, settings);
+  if (!role) {
+    response.status(401).json({ error: "Admin panel access is required." });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(legendsSubmissionsTable)
+    .where(eq(legendsSubmissionsTable.kind, "appeal"))
+    .orderBy(desc(legendsSubmissionsTable.createdAt));
+  response.json(GetBanAppealsResponse.parse(rows));
+});
+
+router.patch(
+  "/legends/admin/appeals/:submissionId",
+  async (request, response): Promise<void> => {
+    const settings = await getSettings();
+    if (!(await getActiveRole(request, settings))) {
+      response.status(401).json({ error: "Admin panel access is required." });
+      return;
+    }
+    const { submissionId } = UpdateBanAppealStatusParams.parse(request.params);
+    const parsed = UpdateBanAppealStatusBody.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Choose a valid review status." });
+      return;
+    }
+    const [updated] = await db
+      .update(legendsSubmissionsTable)
+      .set({ status: parsed.data.status })
+      .where(
+        and(
+          eq(legendsSubmissionsTable.id, submissionId),
+          eq(legendsSubmissionsTable.kind, "appeal"),
+        ),
+      )
+      .returning({ id: legendsSubmissionsTable.id });
+    if (!updated) {
+      response.status(404).json({ error: "Appeal not found." });
+      return;
+    }
+    response.json(UpdateBanAppealStatusResponse.parse({ updated: true }));
+  },
+);
+
+router.get(
+  "/legends/owner/applications",
+  async (request, response): Promise<void> => {
+    const settings = await getSettings();
+    if ((await getActiveRole(request, settings)) !== "owner") {
+      response.status(401).json({ error: "Owner panel access is required." });
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(legendsSubmissionsTable)
+      .where(eq(legendsSubmissionsTable.kind, "application"))
+      .orderBy(desc(legendsSubmissionsTable.createdAt));
+    response.json(GetStaffApplicationsResponse.parse(rows));
+  },
+);
+
+router.patch(
+  "/legends/owner/applications/:submissionId",
+  async (request, response): Promise<void> => {
+    const settings = await getSettings();
+    if ((await getActiveRole(request, settings)) !== "owner") {
+      response.status(401).json({ error: "Owner panel access is required." });
+      return;
+    }
+    const { submissionId } = UpdateStaffApplicationStatusParams.parse(
+      request.params,
+    );
+    const parsed = UpdateStaffApplicationStatusBody.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Choose a valid review status." });
+      return;
+    }
+    const [updated] = await db
+      .update(legendsSubmissionsTable)
+      .set({ status: parsed.data.status })
+      .where(
+        and(
+          eq(legendsSubmissionsTable.id, submissionId),
+          eq(legendsSubmissionsTable.kind, "application"),
+        ),
+      )
+      .returning({ id: legendsSubmissionsTable.id });
+    if (!updated) {
+      response.status(404).json({ error: "Application not found." });
+      return;
+    }
+    response.json(UpdateStaffApplicationStatusResponse.parse({ updated: true }));
+  },
+);
+
+router.post(
+  "/storage/uploads/request-url",
+  async (request, response): Promise<void> => {
+    const settings = await getSettings();
+    if (!(await getActiveRole(request, settings))) {
+      response.status(401).json({ error: "Admin panel access is required." });
+      return;
+    }
+    const parsed = RequestStaffSkinUploadBody.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "Upload a PNG, JPG, or WebP image under 5 MB." });
+      return;
+    }
+    const { uploadURL, objectPath } = await createSkinUploadUrl();
+    response.json(RequestStaffSkinUploadResponse.parse({ uploadURL, objectPath }));
+  },
+);
+
+router.post(
+  "/storage/uploads/finalize",
+  async (request, response): Promise<void> => {
+    const settings = await getSettings();
+    if (!(await getActiveRole(request, settings))) {
+      response.status(401).json({ error: "Admin panel access is required." });
+      return;
+    }
+    const parsed = FinalizeStaffSkinUploadBody.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ error: "The image upload is invalid." });
+      return;
+    }
+    try {
+      const imagePath = await publishSkinImage(parsed.data.objectPath);
+      response.json(FinalizeStaffSkinUploadResponse.parse({ imagePath }));
+    } catch (error) {
+      request.log.warn({ err: error }, "Could not publish staff skin image");
+      response.status(400).json({ error: "The image could not be published." });
+    }
+  },
+);
+
+router.get("/storage/objects/*path", async (request, response): Promise<void> => {
+  const rawPath = request.params.path;
+  const objectPath = `/objects/${Array.isArray(rawPath) ? rawPath.join("/") : rawPath}`;
+  try {
+    const object = await readPublicSkin(objectPath);
+    if (!object) {
+      response.status(404).json({ error: "Image not found." });
+      return;
+    }
+    response.setHeader("Content-Type", object.metadata.contentType ?? "image/png");
+    response.setHeader("Content-Length", String(object.metadata.size ?? ""));
+    response.setHeader("Cache-Control", "public, max-age=3600");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    object.file.createReadStream().pipe(response);
+  } catch (error) {
+    request.log.warn({ err: error }, "Could not serve staff skin image");
+    response.status(404).json({ error: "Image not found." });
+  }
 });
 
 router.get("/legends/auth/session", async (request, response): Promise<void> => {
@@ -291,7 +607,7 @@ router.post("/legends/auth/logout", (_request, response): void => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    path: "/api/legends",
+    path: "/api",
   });
   response.json(
     LogoutLegendsPanelResponse.parse({ authenticated: false, role: null }),
@@ -314,10 +630,18 @@ router.put(
       return;
     }
 
+    const nextContent =
+      role === "admin"
+        ? {
+            ...parsed.data,
+            staffApplicationQuestions: settings.content.staffApplicationQuestions,
+            pluginInfo: settings.content.pluginInfo,
+          }
+        : parsed.data;
     const [saved] = await db
       .update(legendsSettingsTable)
       .set({
-        content: parsed.data as LegendsContent,
+        content: nextContent as LegendsContent,
         updatedAt: new Date(),
       })
       .where(eq(legendsSettingsTable.id, SETTINGS_ID))

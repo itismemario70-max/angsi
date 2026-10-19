@@ -8,6 +8,8 @@ import {
 import {
   GetLegendsContentResponse,
   GetLegendsSessionResponse,
+  GetBanAppealsResponse,
+  GetStaffApplicationsResponse,
   LoginLegendsPanelBody,
   LoginLegendsPanelResponse,
   LogoutLegendsPanelResponse,
@@ -15,6 +17,14 @@ import {
   UpdateLegendsCodesResponse,
   UpdateLegendsContentBody,
   UpdateLegendsContentResponse,
+  SubmitBanAppealBody,
+  SubmitBanAppealResponse,
+  SubmitStaffApplicationBody,
+  SubmitStaffApplicationResponse,
+  UpdateBanAppealStatusBody,
+  UpdateBanAppealStatusResponse,
+  UpdateStaffApplicationStatusBody,
+  UpdateStaffApplicationStatusResponse,
 } from "@workspace/api-zod";
 
 interface D1RunResult {
@@ -26,6 +36,7 @@ interface D1PreparedStatement {
   bind(...values: (string | number | null)[]): D1PreparedStatement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
   run(): Promise<D1RunResult>;
+  all<T = Record<string, unknown>>(): Promise<{ results?: T[] }>;
 }
 
 interface D1Database {
@@ -72,6 +83,16 @@ const MAX_LOGIN_ATTEMPTS = 6;
 const emptyContent = {
   serverIp: "",
   season: "",
+  banAppealsEnabled: false,
+  banAppealQuestions: [
+    { id: "appeal-context", label: "What happened from your perspective?", required: true },
+    { id: "appeal-change", label: "What would you do differently if welcomed back?", required: true },
+  ],
+  staffApplicationQuestions: [
+    { id: "application-intro", label: "Tell us a little about yourself and your time in the community.", required: true },
+    { id: "application-care", label: "How would you help keep Legends welcoming and fair?", required: true },
+  ],
+  pluginInfo: "",
   discordLinks: [],
   staff: [],
   rules: [],
@@ -83,6 +104,7 @@ const loginAttempts = new Map<
   string,
   { count: number; lockedUntil: number }
 >();
+const submissionAttempts = new Map<string, { count: number; resetAt: number }>();
 
 async function ensureSettingsTable(env: WorkerEnv) {
   await env.DB.prepare(`
@@ -96,6 +118,26 @@ async function ensureSettingsTable(env: WorkerEnv) {
       updated_at TEXT NOT NULL
     )
   `).run();
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS legends_submissions (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('appeal', 'application')),
+      minecraft_username TEXT NOT NULL,
+      discord_username TEXT NOT NULL,
+      answers_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'accepted', 'declined')),
+      created_at TEXT NOT NULL
+    )
+  `).run();
+}
+
+function normalizeContent(input: unknown) {
+  const stored =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
+  return GetLegendsContentResponse.parse({ ...emptyContent, ...stored });
 }
 
 function deriveKey(code: string, salt: string): Promise<Buffer> {
@@ -145,7 +187,7 @@ async function getSettings(env: WorkerEnv) {
       .first<LegendsSettingsRow>();
     if (!row) return null;
     return {
-      content: JSON.parse(row.content),
+      content: normalizeContent(JSON.parse(row.content)),
       adminCodeHash: row.admin_code_hash,
       ownerCodeHash: row.owner_code_hash,
       adminVersion: row.admin_version,
@@ -261,14 +303,14 @@ function setSessionCookie(
   const token = encodeSession(role, version, env);
   headers.append(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/api/legends; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=Strict`,
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/api; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=Strict`,
   );
 }
 
 function clearSessionCookie(headers: Headers): void {
   headers.append(
     "Set-Cookie",
-    `${SESSION_COOKIE}=; Path=/api/legends; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict`,
+    `${SESSION_COOKIE}=; Path=/api; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict`,
   );
 }
 
@@ -309,6 +351,122 @@ async function parseRequestBody(request: Request): Promise<unknown> {
   }
 }
 
+function prepareAnswers(
+  questions: { id: string; label: string; required: boolean }[],
+  submitted: { questionId: string; answer: string }[],
+) {
+  if (submitted.length > questions.length) return null;
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const seen = new Set<string>();
+  const answers: { questionId: string; question: string; answer: string }[] = [];
+  for (const item of submitted) {
+    const question = byId.get(item.questionId);
+    const answer = item.answer.trim();
+    if (!question || seen.has(item.questionId) || answer.length > 5000) return null;
+    seen.add(item.questionId);
+    answers.push({ questionId: question.id, question: question.label, answer });
+  }
+  if (questions.some((question) => question.required && !seen.has(question.id))) {
+    return null;
+  }
+  return answers;
+}
+
+function allowSubmission(request: Request, form: "appeal" | "application") {
+  const key = `${form}:${getClientKey(request)}`;
+  const now = Date.now();
+  const previous = submissionAttempts.get(key);
+  if (!previous || previous.resetAt <= now) {
+    submissionAttempts.set(key, { count: 1, resetAt: now + 10 * 60 * 1000 });
+    return true;
+  }
+  if (previous.count >= 4) return false;
+  previous.count += 1;
+  return true;
+}
+
+async function saveSubmission(
+  kind: "appeal" | "application",
+  request: Request,
+  env: WorkerEnv,
+): Promise<Response> {
+  if (!allowSubmission(request, kind)) {
+    return jsonResponse({ error: "Please wait before submitting again." }, 429);
+  }
+  const input = await parseRequestBody(request);
+  const parsed =
+    kind === "appeal"
+      ? SubmitBanAppealBody.safeParse(input)
+      : SubmitStaffApplicationBody.safeParse(input);
+  if (!parsed.success) {
+    return jsonResponse({ error: "Check the required form fields." }, 400);
+  }
+  const { minecraftUsername, discordUsername } = parsed.data;
+  if (
+    !minecraftUsername.trim() ||
+    minecraftUsername.trim().length > 16 ||
+    !discordUsername.trim() ||
+    discordUsername.trim().length > 100
+  ) {
+    return jsonResponse(
+      { error: "Check your Minecraft and Discord names." },
+      400,
+    );
+  }
+  const settings = await getSettings(env);
+  const content = normalizeContent(settings.content);
+  if (kind === "appeal" && !content.banAppealsEnabled) {
+    return jsonResponse({ error: "Ban appeals are currently closed." }, 400);
+  }
+  const questions =
+    kind === "appeal"
+      ? content.banAppealQuestions
+      : content.staffApplicationQuestions;
+  const answers = prepareAnswers(questions, parsed.data.answers);
+  if (!answers) {
+    return jsonResponse({ error: "Answer all required questions." }, 400);
+  }
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO legends_submissions (
+      id, kind, minecraft_username, discord_username, answers_json, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+  `)
+    .bind(
+      crypto.randomUUID(),
+      kind,
+      minecraftUsername.trim(),
+      discordUsername.trim(),
+      JSON.stringify(answers),
+      now,
+    )
+    .run();
+  return jsonResponse(
+    kind === "appeal"
+      ? SubmitBanAppealResponse.parse({ submitted: true })
+      : SubmitStaffApplicationResponse.parse({ submitted: true }),
+    201,
+  );
+}
+
+function mapSubmission(row: {
+  id: string;
+  minecraft_username: string;
+  discord_username: string;
+  answers_json: string;
+  status: string;
+  created_at: string;
+}) {
+  return {
+    id: row.id,
+    minecraftUsername: row.minecraft_username,
+    discordUsername: row.discord_username,
+    answers: JSON.parse(row.answers_json),
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
 async function handleLegendsApi(
   request: Request,
   env: WorkerEnv,
@@ -317,7 +475,89 @@ async function handleLegendsApi(
 
   if (pathname === "/api/legends/content" && request.method === "GET") {
     const settings = await getSettings(env);
-    return jsonResponse(GetLegendsContentResponse.parse(settings.content));
+    return jsonResponse(normalizeContent(settings.content));
+  }
+
+  if (
+    (pathname === "/api/legends/appeals" ||
+      pathname === "/api/legends/applications") &&
+    request.method === "POST"
+  ) {
+    return saveSubmission(
+      pathname.endsWith("/appeals") ? "appeal" : "application",
+      request,
+      env,
+    );
+  }
+
+  if (pathname === "/api/legends/admin/appeals" && request.method === "GET") {
+    const settings = await getSettings(env);
+    if (!(await getActiveRole(request, settings, env))) {
+      return jsonResponse({ error: "Admin panel access is required." }, 401);
+    }
+    const result = await env.DB.prepare(`
+      SELECT id, minecraft_username, discord_username, answers_json, status, created_at
+      FROM legends_submissions WHERE kind = 'appeal' ORDER BY created_at DESC
+    `).all<{
+      id: string;
+      minecraft_username: string;
+      discord_username: string;
+      answers_json: string;
+      status: string;
+      created_at: string;
+    }>();
+    return jsonResponse(GetBanAppealsResponse.parse((result.results ?? []).map(mapSubmission)));
+  }
+
+  if (pathname === "/api/legends/owner/applications" && request.method === "GET") {
+    const settings = await getSettings(env);
+    if ((await getActiveRole(request, settings, env)) !== "owner") {
+      return jsonResponse({ error: "Owner panel access is required." }, 401);
+    }
+    const result = await env.DB.prepare(`
+      SELECT id, minecraft_username, discord_username, answers_json, status, created_at
+      FROM legends_submissions WHERE kind = 'application' ORDER BY created_at DESC
+    `).all<{
+      id: string;
+      minecraft_username: string;
+      discord_username: string;
+      answers_json: string;
+      status: string;
+      created_at: string;
+    }>();
+    return jsonResponse(GetStaffApplicationsResponse.parse((result.results ?? []).map(mapSubmission)));
+  }
+
+  const appealStatusPath = pathname.match(/^\/api\/legends\/admin\/appeals\/([^/]+)$/);
+  if (appealStatusPath && request.method === "PATCH") {
+    const settings = await getSettings(env);
+    if (!(await getActiveRole(request, settings, env))) {
+      return jsonResponse({ error: "Admin panel access is required." }, 401);
+    }
+    const parsed = UpdateBanAppealStatusBody.safeParse(await parseRequestBody(request));
+    if (!parsed.success) return jsonResponse({ error: "Choose a valid review status." }, 400);
+    const saved = await env.DB.prepare(`
+      UPDATE legends_submissions SET status = ?
+      WHERE id = ? AND kind = 'appeal'
+    `).bind(parsed.data.status, decodeURIComponent(appealStatusPath[1])).run();
+    if (!saved.meta?.changes) return jsonResponse({ error: "Appeal not found." }, 404);
+    return jsonResponse(UpdateBanAppealStatusResponse.parse({ updated: true }));
+  }
+
+  const applicationStatusPath = pathname.match(/^\/api\/legends\/owner\/applications\/([^/]+)$/);
+  if (applicationStatusPath && request.method === "PATCH") {
+    const settings = await getSettings(env);
+    if ((await getActiveRole(request, settings, env)) !== "owner") {
+      return jsonResponse({ error: "Owner panel access is required." }, 401);
+    }
+    const parsed = UpdateStaffApplicationStatusBody.safeParse(await parseRequestBody(request));
+    if (!parsed.success) return jsonResponse({ error: "Choose a valid review status." }, 400);
+    const saved = await env.DB.prepare(`
+      UPDATE legends_submissions SET status = ?
+      WHERE id = ? AND kind = 'application'
+    `).bind(parsed.data.status, decodeURIComponent(applicationStatusPath[1])).run();
+    if (!saved.meta?.changes) return jsonResponse({ error: "Application not found." }, 404);
+    return jsonResponse(UpdateStaffApplicationStatusResponse.parse({ updated: true }));
   }
 
   if (pathname === "/api/legends/auth/session" && request.method === "GET") {
@@ -411,13 +651,21 @@ async function handleLegendsApi(
       return jsonResponse({ error: "Review the site content fields." }, 400);
     }
 
+    const nextContent =
+      role === "admin"
+        ? {
+            ...parsed.data,
+            staffApplicationQuestions: normalizeContent(settings.content).staffApplicationQuestions,
+            pluginInfo: normalizeContent(settings.content).pluginInfo,
+          }
+        : parsed.data;
     const saved = await env.DB.prepare(`
       UPDATE legends_settings
       SET content = ?, updated_at = ?
       WHERE id = ?
     `)
       .bind(
-        JSON.stringify(parsed.data),
+        JSON.stringify(nextContent),
         new Date().toISOString(),
         SETTINGS_ID,
       )
@@ -425,7 +673,7 @@ async function handleLegendsApi(
     if (!saved.success || !saved.meta?.changes) {
       return jsonResponse({ error: "Could not save site content." }, 500);
     }
-    return jsonResponse(UpdateLegendsContentResponse.parse(parsed.data));
+    return jsonResponse(UpdateLegendsContentResponse.parse(nextContent));
   }
 
   if (pathname === "/api/legends/owner/codes" && request.method === "PATCH") {

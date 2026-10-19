@@ -46,6 +46,100 @@ export interface EventEntry {
   reward: string;
 }
 
+export interface FormQuestion {
+  id: string;
+  label: string;
+  required: boolean;
+}
+
+export interface CommunityFormAnswer {
+  questionId: string;
+  question: string;
+  answer: string;
+}
+
+export type CommunityFormSubmissionInputAnswersItem = {
+  questionId: string;
+  answer: string;
+};
+
+export interface CommunityFormSubmissionInput {
+  minecraftUsername: string;
+  discordUsername: string;
+  answers: CommunityFormSubmissionInputAnswersItem[];
+}
+
+export type CommunityFormSubmissionStatus = typeof CommunityFormSubmissionStatus[keyof typeof CommunityFormSubmissionStatus];
+
+
+export const CommunityFormSubmissionStatus = {
+  pending: 'pending',
+  accepted: 'accepted',
+  declined: 'declined',
+} as const;
+
+export type CommunityFormSubmission = CommunityFormSubmissionInput & {
+  id: string;
+  answers?: CommunityFormAnswer[];
+  status: CommunityFormSubmissionStatus;
+  createdAt: string;
+};
+
+export interface CommunityFormSubmissionResult {
+  submitted: boolean;
+}
+
+export type CommunityFormStatusUpdateStatus = typeof CommunityFormStatusUpdateStatus[keyof typeof CommunityFormStatusUpdateStatus];
+
+
+export const CommunityFormStatusUpdateStatus = {
+  pending: 'pending',
+  accepted: 'accepted',
+  declined: 'declined',
+} as const;
+
+export interface CommunityFormStatusUpdate {
+  status: CommunityFormStatusUpdateStatus;
+}
+
+export interface CommunityFormStatusResult {
+  updated: boolean;
+}
+
+export type StaffSkinUploadRequestContentType = typeof StaffSkinUploadRequestContentType[keyof typeof StaffSkinUploadRequestContentType];
+
+
+export const StaffSkinUploadRequestContentType = {
+  'image/png': 'image/png',
+  'image/jpeg': 'image/jpeg',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface StaffSkinUploadRequest {
+  /** @minLength 1 */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 5242880
+     */
+  size: number;
+  contentType: StaffSkinUploadRequestContentType;
+}
+
+export interface StaffSkinUploadUrl {
+  uploadURL: string;
+  objectPath: string;
+}
+
+export interface StaffSkinUploadFinalizeInput {
+  /** @minLength 1 */
+  objectPath: string;
+}
+
+export interface StaffSkinUploadFinalizeResult {
+  imagePath: string;
+}
+
 export interface SiteContent {
   serverIp: string;
   season: string;
@@ -54,6 +148,10 @@ export interface SiteContent {
   rules: RuleEntry[];
   punishments: PunishmentSet[];
   events: EventEntry[];
+  banAppealsEnabled: boolean;
+  banAppealQuestions: FormQuestion[];
+  staffApplicationQuestions: FormQuestion[];
+  pluginInfo: string;
 }
 
 export interface SiteContentInput {
@@ -64,6 +162,10 @@ export interface SiteContentInput {
   rules: RuleEntry[];
   punishments: PunishmentSet[];
   events: EventEntry[];
+  banAppealsEnabled: boolean;
+  banAppealQuestions: FormQuestion[];
+  staffApplicationQuestions: FormQuestion[];
+  pluginInfo: string;
 }
 
 export type PanelLoginInputPanel = typeof PanelLoginInputPanel[keyof typeof PanelLoginInputPanel];

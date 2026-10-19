@@ -23,10 +23,19 @@ import type {
   AccessCodeUpdate,
   AccessCodeUpdateResult,
   AuthSession,
+  CommunityFormStatusResult,
+  CommunityFormStatusUpdate,
+  CommunityFormSubmission,
+  CommunityFormSubmissionInput,
+  CommunityFormSubmissionResult,
   HealthStatus,
   PanelLoginInput,
   SiteContent,
-  SiteContentInput
+  SiteContentInput,
+  StaffSkinUploadFinalizeInput,
+  StaffSkinUploadFinalizeResult,
+  StaffSkinUploadRequest,
+  StaffSkinUploadUrl
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -626,5 +635,689 @@ export const useUpdateLegendsCodes = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateLegendsCodesMutationOptions(options));
+    }
+
+export const getSubmitBanAppealUrl = () => {
+
+
+
+
+  return `/api/legends/appeals`
+}
+
+/**
+ * @summary Submit a ban appeal
+ */
+export const submitBanAppeal = async (communityFormSubmissionInput: CommunityFormSubmissionInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityFormSubmissionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CommunityFormSubmissionResult>(getSubmitBanAppealUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(communityFormSubmissionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitBanAppealMutationKey = () => ['submitBanAppeal'] as const;
+
+export const getSubmitBanAppealMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBanAppeal>>, TError,SubmitBanAppealMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitBanAppeal>>, TError,SubmitBanAppealMutationVariables, TContext> => {
+
+const mutationKey = getSubmitBanAppealMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitBanAppeal>>, SubmitBanAppealMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitBanAppeal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitBanAppealMutationResult = NonNullable<Awaited<ReturnType<typeof submitBanAppeal>>>
+    export type SubmitBanAppealMutationBody = BodyType<CommunityFormSubmissionInput>
+    export type SubmitBanAppealMutationError = ErrorType<void>
+    export type SubmitBanAppealMutationVariables = {data: BodyType<CommunityFormSubmissionInput>}
+
+    /**
+ * @summary Submit a ban appeal
+ */
+export const useSubmitBanAppeal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBanAppeal>>, TError,SubmitBanAppealMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitBanAppeal>>,
+        TError,
+        SubmitBanAppealMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitBanAppealMutationOptions(options));
+    }
+
+export const getGetBanAppealsUrl = () => {
+
+
+
+
+  return `/api/legends/admin/appeals`
+}
+
+/**
+ * @summary List ban appeals for admin review
+ */
+export const getBanAppeals = async ( options?: Parameters<typeof customFetch>[1]): Promise<CommunityFormSubmission[]> => {
+
+  return customFetch<CommunityFormSubmission[]>(getGetBanAppealsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBanAppealsQueryKey = () => {
+    return [
+    `/api/legends/admin/appeals`
+    ] as const;
+    }
+
+
+export const getGetBanAppealsQueryOptions = <TData = Awaited<ReturnType<typeof getBanAppeals>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBanAppeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBanAppealsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBanAppeals>>> = ({ signal }) => getBanAppeals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBanAppeals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBanAppealsQueryResult = NonNullable<Awaited<ReturnType<typeof getBanAppeals>>>
+export type GetBanAppealsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List ban appeals for admin review
+ */
+
+export function useGetBanAppeals<TData = Awaited<ReturnType<typeof getBanAppeals>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBanAppeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBanAppealsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBanAppealStatusUrl = (submissionId: string,) => {
+
+
+
+
+  return `/api/legends/admin/appeals/${submissionId}`
+}
+
+/**
+ * @summary Update a ban appeal's review status
+ */
+export const updateBanAppealStatus = async (submissionId: string,
+    communityFormStatusUpdate: CommunityFormStatusUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CommunityFormStatusResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CommunityFormStatusResult>(getUpdateBanAppealStatusUrl(submissionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(communityFormStatusUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateBanAppealStatusMutationKey = () => ['updateBanAppealStatus'] as const;
+
+export const getUpdateBanAppealStatusMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBanAppealStatus>>, TError,UpdateBanAppealStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBanAppealStatus>>, TError,UpdateBanAppealStatusMutationVariables, TContext> => {
+
+const mutationKey = getUpdateBanAppealStatusMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBanAppealStatus>>, UpdateBanAppealStatusMutationVariables> = (props) => {
+          const {submissionId,data} = props ?? {};
+
+          return  updateBanAppealStatus(submissionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBanAppealStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateBanAppealStatus>>>
+    export type UpdateBanAppealStatusMutationBody = BodyType<CommunityFormStatusUpdate>
+    export type UpdateBanAppealStatusMutationError = ErrorType<void>
+    export type UpdateBanAppealStatusMutationVariables = {submissionId: string;data: BodyType<CommunityFormStatusUpdate>}
+
+    /**
+ * @summary Update a ban appeal's review status
+ */
+export const useUpdateBanAppealStatus = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBanAppealStatus>>, TError,UpdateBanAppealStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBanAppealStatus>>,
+        TError,
+        UpdateBanAppealStatusMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateBanAppealStatusMutationOptions(options));
+    }
+
+export const getSubmitStaffApplicationUrl = () => {
+
+
+
+
+  return `/api/legends/applications`
+}
+
+/**
+ * @summary Submit an application to join the staff team
+ */
+export const submitStaffApplication = async (communityFormSubmissionInput: CommunityFormSubmissionInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityFormSubmissionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CommunityFormSubmissionResult>(getSubmitStaffApplicationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(communityFormSubmissionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitStaffApplicationMutationKey = () => ['submitStaffApplication'] as const;
+
+export const getSubmitStaffApplicationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStaffApplication>>, TError,SubmitStaffApplicationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitStaffApplication>>, TError,SubmitStaffApplicationMutationVariables, TContext> => {
+
+const mutationKey = getSubmitStaffApplicationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitStaffApplication>>, SubmitStaffApplicationMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitStaffApplication(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitStaffApplicationMutationResult = NonNullable<Awaited<ReturnType<typeof submitStaffApplication>>>
+    export type SubmitStaffApplicationMutationBody = BodyType<CommunityFormSubmissionInput>
+    export type SubmitStaffApplicationMutationError = ErrorType<void>
+    export type SubmitStaffApplicationMutationVariables = {data: BodyType<CommunityFormSubmissionInput>}
+
+    /**
+ * @summary Submit an application to join the staff team
+ */
+export const useSubmitStaffApplication = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitStaffApplication>>, TError,SubmitStaffApplicationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitStaffApplication>>,
+        TError,
+        SubmitStaffApplicationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitStaffApplicationMutationOptions(options));
+    }
+
+export const getGetStaffApplicationsUrl = () => {
+
+
+
+
+  return `/api/legends/owner/applications`
+}
+
+/**
+ * @summary List staff applications for owner review
+ */
+export const getStaffApplications = async ( options?: Parameters<typeof customFetch>[1]): Promise<CommunityFormSubmission[]> => {
+
+  return customFetch<CommunityFormSubmission[]>(getGetStaffApplicationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStaffApplicationsQueryKey = () => {
+    return [
+    `/api/legends/owner/applications`
+    ] as const;
+    }
+
+
+export const getGetStaffApplicationsQueryOptions = <TData = Awaited<ReturnType<typeof getStaffApplications>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStaffApplications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStaffApplicationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStaffApplications>>> = ({ signal }) => getStaffApplications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStaffApplications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStaffApplicationsQueryResult = NonNullable<Awaited<ReturnType<typeof getStaffApplications>>>
+export type GetStaffApplicationsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List staff applications for owner review
+ */
+
+export function useGetStaffApplications<TData = Awaited<ReturnType<typeof getStaffApplications>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStaffApplications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStaffApplicationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateStaffApplicationStatusUrl = (submissionId: string,) => {
+
+
+
+
+  return `/api/legends/owner/applications/${submissionId}`
+}
+
+/**
+ * @summary Update a staff application's review status
+ */
+export const updateStaffApplicationStatus = async (submissionId: string,
+    communityFormStatusUpdate: CommunityFormStatusUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CommunityFormStatusResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CommunityFormStatusResult>(getUpdateStaffApplicationStatusUrl(submissionId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(communityFormStatusUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateStaffApplicationStatusMutationKey = () => ['updateStaffApplicationStatus'] as const;
+
+export const getUpdateStaffApplicationStatusMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStaffApplicationStatus>>, TError,UpdateStaffApplicationStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateStaffApplicationStatus>>, TError,UpdateStaffApplicationStatusMutationVariables, TContext> => {
+
+const mutationKey = getUpdateStaffApplicationStatusMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStaffApplicationStatus>>, UpdateStaffApplicationStatusMutationVariables> = (props) => {
+          const {submissionId,data} = props ?? {};
+
+          return  updateStaffApplicationStatus(submissionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateStaffApplicationStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateStaffApplicationStatus>>>
+    export type UpdateStaffApplicationStatusMutationBody = BodyType<CommunityFormStatusUpdate>
+    export type UpdateStaffApplicationStatusMutationError = ErrorType<void>
+    export type UpdateStaffApplicationStatusMutationVariables = {submissionId: string;data: BodyType<CommunityFormStatusUpdate>}
+
+    /**
+ * @summary Update a staff application's review status
+ */
+export const useUpdateStaffApplicationStatus = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStaffApplicationStatus>>, TError,UpdateStaffApplicationStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateStaffApplicationStatus>>,
+        TError,
+        UpdateStaffApplicationStatusMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateStaffApplicationStatusMutationOptions(options));
+    }
+
+export const getRequestStaffSkinUploadUrl = () => {
+
+
+
+
+  return `/api/storage/uploads/request-url`
+}
+
+/**
+ * @summary Request a temporary upload URL for a staff skin
+ */
+export const requestStaffSkinUpload = async (staffSkinUploadRequest: StaffSkinUploadRequest, options?: Parameters<typeof customFetch>[1]): Promise<StaffSkinUploadUrl> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<StaffSkinUploadUrl>(getRequestStaffSkinUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(staffSkinUploadRequest)
+  }
+);}
+
+
+
+
+
+export const getRequestStaffSkinUploadMutationKey = () => ['requestStaffSkinUpload'] as const;
+
+export const getRequestStaffSkinUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestStaffSkinUpload>>, TError,RequestStaffSkinUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestStaffSkinUpload>>, TError,RequestStaffSkinUploadMutationVariables, TContext> => {
+
+const mutationKey = getRequestStaffSkinUploadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestStaffSkinUpload>>, RequestStaffSkinUploadMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestStaffSkinUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestStaffSkinUploadMutationResult = NonNullable<Awaited<ReturnType<typeof requestStaffSkinUpload>>>
+    export type RequestStaffSkinUploadMutationBody = BodyType<StaffSkinUploadRequest>
+    export type RequestStaffSkinUploadMutationError = ErrorType<void>
+    export type RequestStaffSkinUploadMutationVariables = {data: BodyType<StaffSkinUploadRequest>}
+
+    /**
+ * @summary Request a temporary upload URL for a staff skin
+ */
+export const useRequestStaffSkinUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestStaffSkinUpload>>, TError,RequestStaffSkinUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestStaffSkinUpload>>,
+        TError,
+        RequestStaffSkinUploadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestStaffSkinUploadMutationOptions(options));
+    }
+
+export const getFinalizeStaffSkinUploadUrl = () => {
+
+
+
+
+  return `/api/storage/uploads/finalize`
+}
+
+/**
+ * @summary Publish a completed staff skin image
+ */
+export const finalizeStaffSkinUpload = async (staffSkinUploadFinalizeInput: StaffSkinUploadFinalizeInput, options?: Parameters<typeof customFetch>[1]): Promise<StaffSkinUploadFinalizeResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<StaffSkinUploadFinalizeResult>(getFinalizeStaffSkinUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(staffSkinUploadFinalizeInput)
+  }
+);}
+
+
+
+
+
+export const getFinalizeStaffSkinUploadMutationKey = () => ['finalizeStaffSkinUpload'] as const;
+
+export const getFinalizeStaffSkinUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeStaffSkinUpload>>, TError,FinalizeStaffSkinUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof finalizeStaffSkinUpload>>, TError,FinalizeStaffSkinUploadMutationVariables, TContext> => {
+
+const mutationKey = getFinalizeStaffSkinUploadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeStaffSkinUpload>>, FinalizeStaffSkinUploadMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  finalizeStaffSkinUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FinalizeStaffSkinUploadMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeStaffSkinUpload>>>
+    export type FinalizeStaffSkinUploadMutationBody = BodyType<StaffSkinUploadFinalizeInput>
+    export type FinalizeStaffSkinUploadMutationError = ErrorType<void>
+    export type FinalizeStaffSkinUploadMutationVariables = {data: BodyType<StaffSkinUploadFinalizeInput>}
+
+    /**
+ * @summary Publish a completed staff skin image
+ */
+export const useFinalizeStaffSkinUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeStaffSkinUpload>>, TError,FinalizeStaffSkinUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof finalizeStaffSkinUpload>>,
+        TError,
+        FinalizeStaffSkinUploadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getFinalizeStaffSkinUploadMutationOptions(options));
     }
 

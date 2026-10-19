@@ -7,6 +7,7 @@
  */
 import type { DiscordLink } from './discordLink';
 import type { EventEntry } from './eventEntry';
+import type { FormQuestion } from './formQuestion';
 import type { PunishmentSet } from './punishmentSet';
 import type { RuleEntry } from './ruleEntry';
 import type { StaffMember } from './staffMember';
@@ -19,4 +20,8 @@ export interface SiteContent {
   rules: RuleEntry[];
   punishments: PunishmentSet[];
   events: EventEntry[];
+  banAppealsEnabled: boolean;
+  banAppealQuestions: FormQuestion[];
+  staffApplicationQuestions: FormQuestion[];
+  pluginInfo: string;
 }

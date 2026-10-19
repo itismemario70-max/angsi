@@ -53,7 +53,19 @@ export const GetLegendsContentResponse = zod.object({
   "time": zod.string(),
   "description": zod.string(),
   "reward": zod.string()
-}))
+})),
+  "banAppealsEnabled": zod.boolean(),
+  "banAppealQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "required": zod.boolean()
+})),
+  "staffApplicationQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "required": zod.boolean()
+})),
+  "pluginInfo": zod.string()
 })
 
 
@@ -129,7 +141,19 @@ export const UpdateLegendsContentBody = zod.object({
   "time": zod.string(),
   "description": zod.string(),
   "reward": zod.string()
-}))
+})),
+  "banAppealsEnabled": zod.boolean(),
+  "banAppealQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "required": zod.boolean()
+})),
+  "staffApplicationQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "required": zod.boolean()
+})),
+  "pluginInfo": zod.string()
 })
 
 export const UpdateLegendsContentResponse = zod.object({
@@ -165,7 +189,19 @@ export const UpdateLegendsContentResponse = zod.object({
   "time": zod.string(),
   "description": zod.string(),
   "reward": zod.string()
-}))
+})),
+  "banAppealsEnabled": zod.boolean(),
+  "banAppealQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "required": zod.boolean()
+})),
+  "staffApplicationQuestions": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "required": zod.boolean()
+})),
+  "pluginInfo": zod.string()
 })
 
 
@@ -186,6 +222,153 @@ export const UpdateLegendsCodesBody = zod.object({
 
 export const UpdateLegendsCodesResponse = zod.object({
   "updated": zod.boolean()
+})
+
+
+/**
+ * @summary Submit a ban appeal
+ */
+export const SubmitBanAppealBody = zod.object({
+  "minecraftUsername": zod.string(),
+  "discordUsername": zod.string(),
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "answer": zod.string()
+}))
+})
+
+export const SubmitBanAppealResponse = zod.object({
+  "submitted": zod.boolean()
+})
+
+
+/**
+ * @summary List ban appeals for admin review
+ */
+export const GetBanAppealsResponseItem = zod.object({
+  "minecraftUsername": zod.string(),
+  "discordUsername": zod.string(),
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "answer": zod.string()
+}))
+}).and(zod.object({
+  "id": zod.string(),
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "question": zod.string(),
+  "answer": zod.string()
+})),
+  "status": zod.enum(['pending', 'accepted', 'declined']),
+  "createdAt": zod.coerce.date()
+}))
+export const GetBanAppealsResponse = zod.array(GetBanAppealsResponseItem)
+
+
+/**
+ * @summary Update a ban appeal's review status
+ */
+export const UpdateBanAppealStatusParams = zod.object({
+  "submissionId": zod.coerce.string()
+})
+
+export const UpdateBanAppealStatusBody = zod.object({
+  "status": zod.enum(['pending', 'accepted', 'declined'])
+})
+
+export const UpdateBanAppealStatusResponse = zod.object({
+  "updated": zod.boolean()
+})
+
+
+/**
+ * @summary Submit an application to join the staff team
+ */
+export const SubmitStaffApplicationBody = zod.object({
+  "minecraftUsername": zod.string(),
+  "discordUsername": zod.string(),
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "answer": zod.string()
+}))
+})
+
+export const SubmitStaffApplicationResponse = zod.object({
+  "submitted": zod.boolean()
+})
+
+
+/**
+ * @summary List staff applications for owner review
+ */
+export const GetStaffApplicationsResponseItem = zod.object({
+  "minecraftUsername": zod.string(),
+  "discordUsername": zod.string(),
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "answer": zod.string()
+}))
+}).and(zod.object({
+  "id": zod.string(),
+  "answers": zod.array(zod.object({
+  "questionId": zod.string(),
+  "question": zod.string(),
+  "answer": zod.string()
+})),
+  "status": zod.enum(['pending', 'accepted', 'declined']),
+  "createdAt": zod.coerce.date()
+}))
+export const GetStaffApplicationsResponse = zod.array(GetStaffApplicationsResponseItem)
+
+
+/**
+ * @summary Update a staff application's review status
+ */
+export const UpdateStaffApplicationStatusParams = zod.object({
+  "submissionId": zod.coerce.string()
+})
+
+export const UpdateStaffApplicationStatusBody = zod.object({
+  "status": zod.enum(['pending', 'accepted', 'declined'])
+})
+
+export const UpdateStaffApplicationStatusResponse = zod.object({
+  "updated": zod.boolean()
+})
+
+
+/**
+ * @summary Request a temporary upload URL for a staff skin
+ */
+
+export const requestStaffSkinUploadBodySizeMax = 5242880;
+
+
+
+export const RequestStaffSkinUploadBody = zod.object({
+  "name": zod.string().min(1),
+  "size": zod.number().int().min(1).max(requestStaffSkinUploadBodySizeMax),
+  "contentType": zod.enum(['image/png', 'image/jpeg', 'image/webp'])
+})
+
+export const RequestStaffSkinUploadResponse = zod.object({
+  "uploadURL": zod.string().url(),
+  "objectPath": zod.string()
+})
+
+
+/**
+ * @summary Publish a completed staff skin image
+ */
+
+
+
+export const FinalizeStaffSkinUploadBody = zod.object({
+  "objectPath": zod.string().min(1)
+})
+
+export const FinalizeStaffSkinUploadResponse = zod.object({
+  "imagePath": zod.string()
 })
 
 

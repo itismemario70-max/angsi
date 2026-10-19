@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: legends
     description: Legends SMP site content and management
+  - name: community-forms
+    description: Public community forms and private application review
+  - name: storage
+    description: Staff skin image uploads
 paths:
   /healthz:
     get:
@@ -124,6 +128,170 @@ paths:
                 $ref: "#/components/schemas/AccessCodeUpdateResult"
         "401":
           description: Owner session required
+  /legends/appeals:
+    post:
+      operationId: submitBanAppeal
+      tags: [community-forms]
+      summary: Submit a ban appeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityFormSubmissionInput"
+      responses:
+        "201":
+          description: Appeal received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityFormSubmissionResult"
+        "400":
+          description: Appeal form is disabled or answers are invalid
+  /legends/admin/appeals:
+    get:
+      operationId: getBanAppeals
+      tags: [community-forms]
+      summary: List ban appeals for admin review
+      responses:
+        "200":
+          description: Submitted appeals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommunityFormSubmission"
+        "401":
+          description: Admin session required
+  /legends/admin/appeals/{submissionId}:
+    patch:
+      operationId: updateBanAppealStatus
+      tags: [community-forms]
+      summary: Update a ban appeal's review status
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityFormStatusUpdate"
+      responses:
+        "200":
+          description: Appeal status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityFormStatusResult"
+        "401":
+          description: Admin session required
+  /legends/applications:
+    post:
+      operationId: submitStaffApplication
+      tags: [community-forms]
+      summary: Submit an application to join the staff team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityFormSubmissionInput"
+      responses:
+        "201":
+          description: Application received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityFormSubmissionResult"
+        "400":
+          description: Application answers are invalid
+  /legends/owner/applications:
+    get:
+      operationId: getStaffApplications
+      tags: [community-forms]
+      summary: List staff applications for owner review
+      responses:
+        "200":
+          description: Submitted applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CommunityFormSubmission"
+        "401":
+          description: Owner session required
+  /legends/owner/applications/{submissionId}:
+    patch:
+      operationId: updateStaffApplicationStatus
+      tags: [community-forms]
+      summary: Update a staff application's review status
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityFormStatusUpdate"
+      responses:
+        "200":
+          description: Application status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityFormStatusResult"
+        "401":
+          description: Owner session required
+  /storage/uploads/request-url:
+    post:
+      operationId: requestStaffSkinUpload
+      tags: [storage]
+      summary: Request a temporary upload URL for a staff skin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffSkinUploadRequest"
+      responses:
+        "200":
+          description: Upload URL issued to an authenticated administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffSkinUploadUrl"
+        "401":
+          description: Admin session required
+  /storage/uploads/finalize:
+    post:
+      operationId: finalizeStaffSkinUpload
+      tags: [storage]
+      summary: Publish a completed staff skin image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffSkinUploadFinalizeInput"
+      responses:
+        "200":
+          description: Public image path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffSkinUploadFinalizeResult"
+        "401":
+          description: Admin session required
 components:
   schemas:
     HealthStatus:
@@ -203,6 +371,117 @@ components:
         reward:
           type: string
       required: [id, title, time, description, reward]
+    FormQuestion:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        required:
+          type: boolean
+      required: [id, label, required]
+    CommunityFormAnswer:
+      type: object
+      properties:
+        questionId:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+      required: [questionId, question, answer]
+    CommunityFormSubmissionInput:
+      type: object
+      properties:
+        minecraftUsername:
+          type: string
+        discordUsername:
+          type: string
+        answers:
+          type: array
+          items:
+            type: object
+            properties:
+              questionId:
+                type: string
+              answer:
+                type: string
+            required: [questionId, answer]
+      required: [minecraftUsername, discordUsername, answers]
+    CommunityFormSubmission:
+      allOf:
+        - $ref: "#/components/schemas/CommunityFormSubmissionInput"
+        - type: object
+          properties:
+            id:
+              type: string
+            answers:
+              type: array
+              items:
+                $ref: "#/components/schemas/CommunityFormAnswer"
+            status:
+              type: string
+              enum: [pending, accepted, declined]
+            createdAt:
+              type: string
+              format: date-time
+          required: [id, status, createdAt]
+    CommunityFormSubmissionResult:
+      type: object
+      properties:
+        submitted:
+          type: boolean
+      required: [submitted]
+    CommunityFormStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, declined]
+      required: [status]
+    CommunityFormStatusResult:
+      type: object
+      properties:
+        updated:
+          type: boolean
+      required: [updated]
+    StaffSkinUploadRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+          maximum: 5242880
+        contentType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+      required: [name, size, contentType]
+    StaffSkinUploadUrl:
+      type: object
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
+      required: [uploadURL, objectPath]
+    StaffSkinUploadFinalizeInput:
+      type: object
+      properties:
+        objectPath:
+          type: string
+          minLength: 1
+      required: [objectPath]
+    StaffSkinUploadFinalizeResult:
+      type: object
+      properties:
+        imagePath:
+          type: string
+      required: [imagePath]
     SiteContent:
       type: object
       properties:
@@ -230,6 +509,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EventEntry"
+        banAppealsEnabled:
+          type: boolean
+        banAppealQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormQuestion"
+        staffApplicationQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormQuestion"
+        pluginInfo:
+          type: string
       required:
         - serverIp
         - season
@@ -238,6 +529,10 @@ components:
         - rules
         - punishments
         - events
+        - banAppealsEnabled
+        - banAppealQuestions
+        - staffApplicationQuestions
+        - pluginInfo
     SiteContentInput:
       type: object
       properties:
@@ -265,6 +560,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EventEntry"
+        banAppealsEnabled:
+          type: boolean
+        banAppealQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormQuestion"
+        staffApplicationQuestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormQuestion"
+        pluginInfo:
+          type: string
       required:
         - serverIp
         - season
@@ -273,6 +580,10 @@ components:
         - rules
         - punishments
         - events
+        - banAppealsEnabled
+        - banAppealQuestions
+        - staffApplicationQuestions
+        - pluginInfo
     PanelLoginInput:
       type: object
       properties:
