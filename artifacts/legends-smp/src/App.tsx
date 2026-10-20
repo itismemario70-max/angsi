@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDownRight, ArrowRight, Check, ChevronDown, Compass, Copy, ExternalLink, Upload,
+  ArrowDownRight, ArrowRight, Check, ChevronDown, Compass, Copy, ExternalLink,
   Eye, EyeOff, KeyRound, Leaf, LockKeyhole, LogOut, Menu, Plus, Save, Shield,
   ShieldCheck, Swords, Trash2, Users, X, Sun, Moon, Minimize2, Maximize2, RotateCw,
 } from 'lucide-react';
@@ -11,7 +11,7 @@ import {
   useGetLegendsSession, useLoginLegendsPanel, useLogoutLegendsPanel,
   useUpdateLegendsCodes, useUpdateLegendsContent, useSubmitBanAppeal, useSubmitStaffApplication,
   useGetBanAppeals, useUpdateBanAppealStatus, useGetStaffApplications,
-  useUpdateStaffApplicationStatus, useRequestStaffSkinUpload, useFinalizeStaffSkinUpload,
+  useUpdateStaffApplicationStatus,
 } from '@workspace/api-client-react';
 import type { SiteContentInput, CommunityFormSubmission, FormQuestion } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -553,8 +553,6 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
   const logout = useLogoutLegendsPanel();
   const updateContent = useUpdateLegendsContent();
   const updateCodes = useUpdateLegendsCodes();
-  const requestSkinUpload = useRequestStaffSkinUpload();
-  const finalizeSkinUpload = useFinalizeStaffSkinUpload();
   const authorized = !!session?.authenticated && (panel === 'admin' ? session.role === 'admin' || session.role === 'owner' : session.role === 'owner');
   const [loginCode, setLoginCode] = useState('');
   const [loginVisible, setLoginVisible] = useState(false);
@@ -565,12 +563,11 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
   const [adminCode, setAdminCode] = useState('');
   const [ownerCode, setOwnerCode] = useState('');
   const [showCodes, setShowCodes] = useState(false);
-  const [skinFiles, setSkinFiles] = useState<Record<string, File>>({});
   useEffect(() => {
     if (contentData) setContent(contentData);
   }, [contentData]);
   const list = content[selected] as CollectionItem[];
-  const dirty = useMemo(() => JSON.stringify(content) !== JSON.stringify(contentData ?? emptyContent) || Object.keys(skinFiles).length > 0, [content, contentData, skinFiles]);
+  const dirty = useMemo(() => JSON.stringify(content) !== JSON.stringify(contentData ?? emptyContent), [content, contentData]);
 
   const performLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -591,17 +588,7 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
   const saveContent = async () => {
     setSaveMessage('');
     try {
-      let nextContent = content;
-      for (const [staffId, file] of Object.entries(skinFiles)) {
-        const requested = await requestSkinUpload.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type as 'image/png' | 'image/jpeg' | 'image/webp' } });
-        const upload = await fetch(requested.uploadURL, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-        if (!upload.ok) throw new Error('Image upload failed');
-        const finalized = await finalizeSkinUpload.mutateAsync({ data: { objectPath: requested.objectPath } });
-        nextContent = { ...nextContent, staff: nextContent.staff.map(member => member.id === staffId ? { ...member, skinUrl: finalized.imagePath } : member) };
-      }
-      setContent(nextContent);
-      await updateContent.mutateAsync({ data: nextContent });
-      setSkinFiles({});
+      await updateContent.mutateAsync({ data: content });
       await queryClient.invalidateQueries({ queryKey: getGetLegendsContentQueryKey() });
       setSaveMessage('Changes saved to the community site.');
     } catch {
@@ -695,7 +682,7 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
                   {panel === 'owner' && <ApplicationReviews />}
                   <div className="editor-tabs" role="tablist">{(Object.keys(collectionMeta) as CollectionKey[]).map(key => <button key={key} role="tab" aria-selected={selected === key} className={selected === key ? 'editor-tab active-tab' : 'editor-tab'} onClick={() => setSelected(key)} data-testid={`tab-${key}`}><span>{collectionMeta[key].plural}</span><b>{content[key].length}</b></button>)}</div>
                   <div className="collection-head"><div><span className="section-kicker">{collectionMeta[selected].plural.toUpperCase()}</span><span className="collection-count">{list.length} {list.length === 1 ? 'entry' : 'entries'}</span></div><button className="add-entry" onClick={addItem} data-testid={`button-add-${selected}`}><Plus size={15} /> Add {collectionMeta[selected].label.toLowerCase()}</button></div>
-                  {list.length === 0 ? <div className="editor-empty"><span className="empty-icon"><Plus size={19} /></span><div><h3>Nothing here yet.</h3><p>Add the first {collectionMeta[selected].label.toLowerCase()} to publish it on the community site.</p></div></div> : <div className="entry-list">{list.map((item, index) => <article className="entry-card" key={item.id} data-testid={`editor-entry-${selected}-${item.id}`}><div className="entry-card-head"><span><b>{String(index + 1).padStart(2, '0')}</b> {collectionMeta[selected].label}</span><button onClick={() => removeItem(item.id)} aria-label={`Remove ${collectionMeta[selected].label.toLowerCase()}`} data-testid={`button-remove-${selected}-${item.id}`}><Trash2 size={15} /></button></div><details className="entry-fold management-fold" open><summary className="entry-fold-summary">Edit details <ChevronDown className="fold-chevron" size={15} /></summary><div className="entry-fields">{collectionMeta[selected].fields.map(field => field.key === 'skinUrl' && selected === 'staff' ? <StaffImageField key={field.key} member={item as Staff} file={skinFiles[item.id]} onFile={file => setSkinFiles(prev => ({ ...prev, [item.id]: file }))} onSkinUrlChange={url => { setContent(prev => ({ ...prev, staff: prev.staff.map(member => member.id === item.id ? { ...member, skinUrl: url || null } : member) })); setSkinFiles(prev => { const next = { ...prev }; delete next[item.id]; return next; }); }} /> : field.boolean ? <label className="check-field" key={field.key}><input type="checkbox" checked={Boolean((item as unknown as Record<string, unknown>)[field.key])} onChange={e => patchItem(item.id, field.key, e.target.checked)} data-testid={`input-${selected}-${field.key}-${item.id}`} /><span>{field.label}</span></label> : <label key={field.key}>{field.label}{field.multiline ? <textarea value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} rows={3} /> : <input value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} />}</label>)}</div></details></article>)}</div>}
+                  {list.length === 0 ? <div className="editor-empty"><span className="empty-icon"><Plus size={19} /></span><div><h3>Nothing here yet.</h3><p>Add the first {collectionMeta[selected].label.toLowerCase()} to publish it on the community site.</p></div></div> : <div className="entry-list">{list.map((item, index) => <article className="entry-card" key={item.id} data-testid={`editor-entry-${selected}-${item.id}`}><div className="entry-card-head"><span><b>{String(index + 1).padStart(2, '0')}</b> {collectionMeta[selected].label}</span><button onClick={() => removeItem(item.id)} aria-label={`Remove ${collectionMeta[selected].label.toLowerCase()}`} data-testid={`button-remove-${selected}-${item.id}`}><Trash2 size={15} /></button></div><details className="entry-fold management-fold" open><summary className="entry-fold-summary">Edit details <ChevronDown className="fold-chevron" size={15} /></summary><div className="entry-fields">{collectionMeta[selected].fields.map(field => field.key === 'skinUrl' && selected === 'staff' ? <StaffImageField key={field.key} member={item as Staff} onSkinUrlChange={url => setContent(prev => ({ ...prev, staff: prev.staff.map(member => member.id === item.id ? { ...member, skinUrl: url || null } : member) }))} /> : field.boolean ? <label className="check-field" key={field.key}><input type="checkbox" checked={Boolean((item as unknown as Record<string, unknown>)[field.key])} onChange={e => patchItem(item.id, field.key, e.target.checked)} data-testid={`input-${selected}-${field.key}-${item.id}`} /><span>{field.label}</span></label> : <label key={field.key}>{field.label}{field.multiline ? <textarea value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} rows={3} /> : <input value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} />}</label>)}</div></details></article>)}</div>}
                 </>
               )}
               {saveMessage && <p className={saveMessage.startsWith('Could') ? 'save-feedback save-error' : 'save-feedback'} role="status" data-testid="status-save-message"><Check size={14} />{saveMessage}</p>}
@@ -718,18 +705,10 @@ function QuestionEditor({ title, questions, onChange }: { title: string; questio
   return <details className="question-editor management-fold" open><summary className="question-editor-label fold-summary"><span>{title}</span><span>{questions.length} {questions.length === 1 ? 'question' : 'questions'}<ChevronDown className="fold-chevron" size={15} /></span></summary><div className="question-editor-body">{questions.length ? questions.map((question, index) => <div className="managed-question" key={question.id}><span className="managed-question-number">{String(index + 1).padStart(2, '0')}</span><input aria-label={`Question ${index + 1}`} value={question.label} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, label: e.target.value } : item))} placeholder="Write a clear, welcoming question" /><label className="required-control"><input type="checkbox" checked={question.required} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, required: e.target.checked } : item))} />Required</label><button type="button" className="remove-question" aria-label={`Remove question ${index + 1}`} onClick={() => onChange(questions.filter(item => item.id !== question.id))}><X size={15} /></button></div>) : <p className="no-questions">No custom questions yet. Public forms will use the community starter questions until you add your own.</p>}<div className="add-question-row"><input value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder="Add a question for players" /><button type="button" className="button button-dark" onClick={add} disabled={!label.trim()}><Plus size={14} /> Add question</button></div></div></details>;
 }
 
-function StaffImageField({ member, file, onFile, onSkinUrlChange }: { member: Staff; file?: File; onFile: (file: File) => void; onSkinUrlChange: (url: string) => void }) {
-  const [invalid, setInvalid] = useState('');
-  const [localPreview, setLocalPreview] = useState('');
+function StaffImageField({ member, onSkinUrlChange }: { member: Staff; onSkinUrlChange: (url: string) => void }) {
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewReload, setPreviewReload] = useState(0);
-  useEffect(() => {
-    if (!file) { setLocalPreview(''); return; }
-    const url = URL.createObjectURL(file);
-    setLocalPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-  const preview = localPreview || member.skinUrl?.trim() || minecraftSkinUrl(member.minecraftUsername);
+  const preview = member.skinUrl?.trim() || minecraftSkinUrl(member.minecraftUsername);
   useEffect(() => {
     setPreviewFailed(false);
     setPreviewReload(0);
@@ -741,7 +720,27 @@ function StaffImageField({ member, file, onFile, onSkinUrlChange }: { member: St
     setPreviewFailed(false);
     setPreviewReload(value => value + 1);
   };
-  return <div className="staff-image-editor"><span className="upload-label">STAFF IMAGE</span><div className="image-upload-control"><div className="staff-image-preview">{preview && !previewFailed ? <img key={`${preview}-${previewReload}`} src={reloadedImageUrl(preview, previewReload)} alt={`${member.displayName || member.minecraftUsername || 'Staff'} image preview`} onError={() => setPreviewFailed(true)} /> : <span>{(member.minecraftUsername || 'L').slice(0, 1).toUpperCase()}</span>}</div><div className="upload-prompt"><div className="staff-image-actions"><label className="upload-button"><Upload size={14} />{file ? 'Choose another image' : member.skinUrl ? 'Replace image' : 'Upload image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const picked = event.currentTarget.files?.[0]; if (!picked) return; if (!['image/png', 'image/jpeg', 'image/webp'].includes(picked.type) || picked.size > 5 * 1024 * 1024) { setInvalid('Choose a PNG, JPG, or WebP image up to 5 MB.'); event.currentTarget.value = ''; return; } setInvalid(''); onFile(picked); }} /></label><button className="upload-button" type="button" disabled={!minecraftSkinUrl(member.minecraftUsername)} onClick={useMinecraftSkin}><Users size={13} />Use Minecraft skin</button>{preview && <button className="upload-button" type="button" onClick={() => { setPreviewFailed(false); setPreviewReload(value => value + 1); }}><RotateCw size={13} />Reload preview</button>}</div><label className="skin-url-field">IMAGE URL<input type="url" value={member.skinUrl ?? ''} onChange={event => onSkinUrlChange(event.target.value)} placeholder="https://example.com/image.png" /></label><p>Upload PNG, JPG, or WebP up to 5 MB, paste an image URL, or leave the URL blank to auto-load the Minecraft skin. Uploads save to R2 on Cloudflare.</p>{file && <span className="selected-file">{file.name}</span>}{previewFailed && <span className="upload-error" role="status">Preview did not load. Check the URL or reload the preview.</span>}{invalid && <span className="upload-error" role="alert">{invalid}</span>}</div></div></div>;
+  return (
+    <div className="staff-image-editor">
+      <span className="staff-image-heading">STAFF IMAGE</span>
+      <div className="staff-image-control">
+        <div className="staff-image-preview">
+          {preview && !previewFailed
+            ? <img key={`${preview}-${previewReload}`} src={reloadedImageUrl(preview, previewReload)} alt={`${member.displayName || member.minecraftUsername || 'Staff'} image preview`} onError={() => setPreviewFailed(true)} />
+            : <span>{(member.minecraftUsername || 'L').slice(0, 1).toUpperCase()}</span>}
+        </div>
+        <div className="staff-image-fields">
+          <div className="staff-image-actions">
+            <button className="staff-image-action" type="button" disabled={!minecraftSkinUrl(member.minecraftUsername)} onClick={useMinecraftSkin}><Users size={13} />Use Minecraft skin</button>
+            {preview && <button className="staff-image-action" type="button" onClick={() => { setPreviewFailed(false); setPreviewReload(value => value + 1); }}><RotateCw size={13} />Reload preview</button>}
+          </div>
+          <label className="skin-url-field">IMAGE URL<input type="url" value={member.skinUrl ?? ''} onChange={event => onSkinUrlChange(event.target.value)} placeholder="https://example.com/image.png" /></label>
+          <p>Paste a public image URL or leave it blank to use the Minecraft skin. Image uploads are not enabled.</p>
+          {previewFailed && <span className="image-preview-error" role="status">Preview did not load. Check the URL or reload the preview.</span>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AppealReviews() {

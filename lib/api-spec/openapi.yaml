@@ -14,8 +14,6 @@ tags:
     description: Legends SMP site content and management
   - name: community-forms
     description: Public community forms and private application review
-  - name: storage
-    description: Staff skin image uploads
 paths:
   /healthz:
     get:
@@ -252,46 +250,6 @@ paths:
                 $ref: "#/components/schemas/CommunityFormStatusResult"
         "401":
           description: Owner session required
-  /storage/uploads/request-url:
-    post:
-      operationId: requestStaffSkinUpload
-      tags: [storage]
-      summary: Request a temporary upload URL for a staff skin
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StaffSkinUploadRequest"
-      responses:
-        "200":
-          description: Upload URL issued to an authenticated administrator
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StaffSkinUploadUrl"
-        "401":
-          description: Admin session required
-  /storage/uploads/finalize:
-    post:
-      operationId: finalizeStaffSkinUpload
-      tags: [storage]
-      summary: Publish a completed staff skin image
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StaffSkinUploadFinalizeInput"
-      responses:
-        "200":
-          description: Public image path
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StaffSkinUploadFinalizeResult"
-        "401":
-          description: Admin session required
 components:
   schemas:
     HealthStatus:
@@ -446,42 +404,6 @@ components:
         updated:
           type: boolean
       required: [updated]
-    StaffSkinUploadRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          minLength: 1
-        size:
-          type: integer
-          minimum: 1
-          maximum: 5242880
-        contentType:
-          type: string
-          enum: [image/png, image/jpeg, image/webp]
-      required: [name, size, contentType]
-    StaffSkinUploadUrl:
-      type: object
-      properties:
-        uploadURL:
-          type: string
-          format: uri
-        objectPath:
-          type: string
-      required: [uploadURL, objectPath]
-    StaffSkinUploadFinalizeInput:
-      type: object
-      properties:
-        objectPath:
-          type: string
-          minLength: 1
-      required: [objectPath]
-    StaffSkinUploadFinalizeResult:
-      type: object
-      properties:
-        imagePath:
-          type: string
-      required: [imagePath]
     SiteContent:
       type: object
       properties:

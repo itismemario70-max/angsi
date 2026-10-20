@@ -1019,17 +1019,16 @@ html[data-theme="dark"] .theme-toggle:hover { color: #f3f0e4; }
 .review-loading { display:grid; gap:8px; padding-top:15px; }
 .review-loading i { height:48px; background:linear-gradient(90deg,#e6e3d8,#f7f5ed,#e6e3d8); background-size:200% 100%; animation:shimmer 1.5s infinite; }
 .staff-image-editor { grid-column:1/-1; min-width:0; }
-.upload-label { display:block; margin-bottom:8px; color:#738071; font:500 7px 'DM Mono',monospace; letter-spacing:.1em; }
-.image-upload-control { display:flex; gap:12px; align-items:center; padding:11px; border:1px solid #d9d4c6; background:#f4f2e9; }
+.staff-image-heading { display:block; margin-bottom:8px; color:#738071; font:500 7px 'DM Mono',monospace; letter-spacing:.1em; }
+.staff-image-control { display:flex; gap:12px; align-items:center; padding:11px; border:1px solid #d9d4c6; background:#f4f2e9; }
 .staff-image-preview { width:63px;height:68px;display:grid;place-items:center;overflow:hidden;flex:none;background:#d9ddcf; }
 .staff-image-preview img { width:100%;height:100%;object-fit:contain;image-rendering:pixelated; }
 .staff-image-preview span { color:#f2e8cc;background:#47604b;padding:9px 13px;font:500 22px 'Oswald',sans-serif; }
-.upload-prompt { min-width:0; }
-.upload-button { display:inline-flex!important; flex-direction:row!important; align-items:center; gap:7px!important; width:max-content; padding:8px 10px; border:1px solid #bcc4b4; background:#f9f7ef; color:#47604b!important; cursor:pointer; font:600 9px 'Manrope',sans-serif!important; letter-spacing:0!important; }
-.upload-button input { position:absolute;width:1px;height:1px;opacity:0;pointer-events:none; }
-.upload-prompt p { margin:7px 0 0;color:#898a7d;font-size:8px; }
-.selected-file,.upload-error { display:block; margin-top:5px; color:#587057; font-size:8px;overflow-wrap:anywhere; }
-.upload-error { color:#9b5142; }
+.staff-image-fields { min-width:0;flex:1; }
+.staff-image-action { display:inline-flex; align-items:center; gap:7px; width:max-content; padding:8px 10px; border:1px solid #bcc4b4; background:#f9f7ef; color:#47604b; cursor:pointer; font:600 9px 'Manrope',sans-serif; }
+.staff-image-action:disabled { cursor:not-allowed;opacity:.5; }
+.staff-image-fields p { margin:7px 0 0;color:#898a7d;font-size:8px; }
+.image-preview-error { display:block; margin-top:5px; color:#9b5142; font-size:8px;overflow-wrap:anywhere; }
 html[data-theme="dark"] .submission-layout,html[data-theme="dark"] .plugin-page { background:#303d36; }
 html[data-theme="dark"] .submission-aside h1,html[data-theme="dark"] .plugin-intro h1,html[data-theme="dark"] .submission-card-head h2,html[data-theme="dark"] .form-success h3,html[data-theme="dark"] .form-closed h3,html[data-theme="dark"] .plugin-empty h2 { color:#e4e2d4; }
 html[data-theme="dark"] .submission-aside > p,html[data-theme="dark"] .plugin-intro > p { color:#c0c8bc; }
@@ -1046,7 +1045,7 @@ html[data-theme="dark"] .review-card h4,html[data-theme="dark"] .review-answers 
 html[data-theme="dark"] .review-answers,html[data-theme="dark"] .review-actions { border-color:#465449; }
 html[data-theme="dark"] .status-choice { border-color:#536052;color:#bdc7b8; }
 html[data-theme="dark"] .status-choice.selected { background:#37483a;color:#d6e1d0; }
-html[data-theme="dark"] .image-upload-control { background:#26322c;border-color:#4b594d; }
+html[data-theme="dark"] .staff-image-control { background:#26322c;border-color:#4b594d; }
 @media (max-width: 800px) {
   .submission-layout,.plugin-page { grid-template-columns:1fr; gap:35px; padding:55px 7% 75px; }
   .submission-aside { position:static; }
@@ -1067,7 +1066,7 @@ html[data-theme="dark"] .image-upload-control { background:#26322c;border-color:
   .add-question-row { flex-direction:column; }
   .review-actions { align-items:flex-start; flex-direction:column; }
   .review-actions > div { flex-wrap:wrap; }
-  .image-upload-control { align-items:flex-start; }
+  .staff-image-control { align-items:flex-start; }
 }
 
 /* Shared public navigation and motion for the separate information pages. */
@@ -1138,7 +1137,7 @@ html[data-theme="dark"] .image-upload-control { background:#26322c;border-color:
 .review-card-body time { margin-top:0; }
 .review-card[open] > .review-card-top { border-bottom:1px solid #e2ded2; }
 .staff-image-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
-.staff-image-actions .upload-button { font-size:8px!important; }
+.staff-image-actions .staff-image-action { font-size:8px; }
 .skin-url-field { display:flex; flex-direction:column; gap:6px; margin-top:10px; color:#738071; font:500 7px 'DM Mono',monospace; letter-spacing:.1em; }
 .skin-url-field input { min-width:0; width:100%; box-sizing:border-box; padding:8px 9px; border:1px solid #d5d1c4; background:#fbfaf4; color:var(--ink); font:400 10px 'Manrope',sans-serif; letter-spacing:0; }
 .skin-url-field input:focus { border-color:#82947c; box-shadow:0 0 0 2px rgba(97,125,99,.13); outline:0; }

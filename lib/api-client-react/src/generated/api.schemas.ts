@@ -106,40 +106,6 @@ export interface CommunityFormStatusResult {
   updated: boolean;
 }
 
-export type StaffSkinUploadRequestContentType = typeof StaffSkinUploadRequestContentType[keyof typeof StaffSkinUploadRequestContentType];
-
-
-export const StaffSkinUploadRequestContentType = {
-  'image/png': 'image/png',
-  'image/jpeg': 'image/jpeg',
-  'image/webp': 'image/webp',
-} as const;
-
-export interface StaffSkinUploadRequest {
-  /** @minLength 1 */
-  name: string;
-  /**
-     * @minimum 1
-     * @maximum 5242880
-     */
-  size: number;
-  contentType: StaffSkinUploadRequestContentType;
-}
-
-export interface StaffSkinUploadUrl {
-  uploadURL: string;
-  objectPath: string;
-}
-
-export interface StaffSkinUploadFinalizeInput {
-  /** @minLength 1 */
-  objectPath: string;
-}
-
-export interface StaffSkinUploadFinalizeResult {
-  imagePath: string;
-}
-
 export interface SiteContent {
   serverIp: string;
   season: string;

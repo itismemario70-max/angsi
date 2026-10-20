@@ -30,8 +30,3 @@ export * from './ruleEntry';
 export * from './siteContent';
 export * from './siteContentInput';
 export * from './staffMember';
-export * from './staffSkinUploadFinalizeInput';
-export * from './staffSkinUploadFinalizeResult';
-export * from './staffSkinUploadRequest';
-export * from './staffSkinUploadRequestContentType';
-export * from './staffSkinUploadUrl';

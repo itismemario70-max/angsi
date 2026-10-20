@@ -14,8 +14,6 @@ import {
   type LegendsContent,
 } from "@workspace/db";
 import {
-  FinalizeStaffSkinUploadBody,
-  FinalizeStaffSkinUploadResponse,
   GetBanAppealsResponse,
   GetLegendsContentResponse,
   GetLegendsSessionResponse,
@@ -23,8 +21,6 @@ import {
   LoginLegendsPanelBody,
   LoginLegendsPanelResponse,
   LogoutLegendsPanelResponse,
-  RequestStaffSkinUploadBody,
-  RequestStaffSkinUploadResponse,
   SubmitBanAppealBody,
   SubmitBanAppealResponse,
   SubmitStaffApplicationBody,
@@ -40,11 +36,6 @@ import {
   UpdateStaffApplicationStatusParams,
   UpdateStaffApplicationStatusResponse,
 } from "@workspace/api-zod";
-import {
-  createSkinUploadUrl,
-  publishSkinImage,
-  readPublicSkin,
-} from "../lib/skinStorage";
 
 const router: IRouter = Router();
 const SETTINGS_ID = "legends";
@@ -487,67 +478,6 @@ router.patch(
     response.json(UpdateStaffApplicationStatusResponse.parse({ updated: true }));
   },
 );
-
-router.post(
-  "/storage/uploads/request-url",
-  async (request, response): Promise<void> => {
-    const settings = await getSettings();
-    if (!(await getActiveRole(request, settings))) {
-      response.status(401).json({ error: "Admin panel access is required." });
-      return;
-    }
-    const parsed = RequestStaffSkinUploadBody.safeParse(request.body);
-    if (!parsed.success) {
-      response.status(400).json({ error: "Upload a PNG, JPG, or WebP image under 5 MB." });
-      return;
-    }
-    const { uploadURL, objectPath } = await createSkinUploadUrl();
-    response.json(RequestStaffSkinUploadResponse.parse({ uploadURL, objectPath }));
-  },
-);
-
-router.post(
-  "/storage/uploads/finalize",
-  async (request, response): Promise<void> => {
-    const settings = await getSettings();
-    if (!(await getActiveRole(request, settings))) {
-      response.status(401).json({ error: "Admin panel access is required." });
-      return;
-    }
-    const parsed = FinalizeStaffSkinUploadBody.safeParse(request.body);
-    if (!parsed.success) {
-      response.status(400).json({ error: "The image upload is invalid." });
-      return;
-    }
-    try {
-      const imagePath = await publishSkinImage(parsed.data.objectPath);
-      response.json(FinalizeStaffSkinUploadResponse.parse({ imagePath }));
-    } catch (error) {
-      request.log.warn({ err: error }, "Could not publish staff skin image");
-      response.status(400).json({ error: "The image could not be published." });
-    }
-  },
-);
-
-router.get("/storage/objects/*path", async (request, response): Promise<void> => {
-  const rawPath = request.params.path;
-  const objectPath = `/objects/${Array.isArray(rawPath) ? rawPath.join("/") : rawPath}`;
-  try {
-    const object = await readPublicSkin(objectPath);
-    if (!object) {
-      response.status(404).json({ error: "Image not found." });
-      return;
-    }
-    response.setHeader("Content-Type", object.metadata.contentType ?? "image/png");
-    response.setHeader("Content-Length", String(object.metadata.size ?? ""));
-    response.setHeader("Cache-Control", "public, max-age=3600");
-    response.setHeader("X-Content-Type-Options", "nosniff");
-    object.file.createReadStream().pipe(response);
-  } catch (error) {
-    request.log.warn({ err: error }, "Could not serve staff skin image");
-    response.status(404).json({ error: "Image not found." });
-  }
-});
 
 router.get("/legends/auth/session", async (request, response): Promise<void> => {
   const settings = await getSettings();

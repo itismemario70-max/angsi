@@ -337,38 +337,3 @@ export const UpdateStaffApplicationStatusResponse = zod.object({
 })
 
 
-/**
- * @summary Request a temporary upload URL for a staff skin
- */
-
-export const requestStaffSkinUploadBodySizeMax = 5242880;
-
-
-
-export const RequestStaffSkinUploadBody = zod.object({
-  "name": zod.string().min(1),
-  "size": zod.number().int().min(1).max(requestStaffSkinUploadBodySizeMax),
-  "contentType": zod.enum(['image/png', 'image/jpeg', 'image/webp'])
-})
-
-export const RequestStaffSkinUploadResponse = zod.object({
-  "uploadURL": zod.string().url(),
-  "objectPath": zod.string()
-})
-
-
-/**
- * @summary Publish a completed staff skin image
- */
-
-
-
-export const FinalizeStaffSkinUploadBody = zod.object({
-  "objectPath": zod.string().min(1)
-})
-
-export const FinalizeStaffSkinUploadResponse = zod.object({
-  "imagePath": zod.string()
-})
-
-
