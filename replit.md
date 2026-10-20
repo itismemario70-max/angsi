@@ -6,6 +6,7 @@ The official Legends SMP website, with public server information and secure admi
 
 - Cloudflare Workers Builds: use `pnpm --filter @workspace/legends-smp run deploy`. The command builds the frontend and deploys the dynamic Worker API. `pnpm --filter @workspace/legends-smp run deploy --dry-run` builds and bundles without publishing.
 - Create a Cloudflare D1 database named `legends`, then set its ID as `D1_DATABASE_ID` in the Cloudflare Workers Builds environment.
+- Create an R2 bucket named `legends-smp-staff-images`. `wrangler.jsonc` binds it to the Worker as `SKIN_IMAGES`; do not put R2 access keys in the website. The admin/owner staff editor uploads images through the authenticated Worker and can also save an image URL or a Minecraft username skin.
 - Configure `SESSION_SECRET`, `LEGENDS_ADMIN_CODE`, and `LEGENDS_OWNER_CODE` as Cloudflare Worker secrets. Never put their values in source code. The Worker hashes the access codes when it initializes its settings row.
 - The Worker creates its D1 settings table on first request. Existing PostgreSQL content is not copied into D1 automatically; migrate it separately before switching production traffic if it must be retained.
 - The optional Replit Express API server uses PostgreSQL via `DATABASE_URL`: `pnpm --filter @workspace/api-server run dev`.

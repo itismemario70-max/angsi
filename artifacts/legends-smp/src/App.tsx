@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import {
   ArrowDownRight, ArrowRight, Check, ChevronDown, Compass, Copy, ExternalLink, Upload,
   Eye, EyeOff, KeyRound, Leaf, LockKeyhole, LogOut, Menu, Plus, Save, Shield,
-  ShieldCheck, Swords, Trash2, Users, X, Sun, Moon,
+  ShieldCheck, Swords, Trash2, Users, X, Sun, Moon, Minimize2, Maximize2, RotateCw,
 } from 'lucide-react';
 import {
   getGetLegendsContentQueryKey, getGetLegendsSessionQueryKey, getGetBanAppealsQueryKey,
@@ -33,6 +33,30 @@ const emptyContent: SiteContentInput = {
   serverIp: '', season: '', discordLinks: [], staff: [], rules: [], punishments: [], events: [],
   banAppealsEnabled: false, banAppealQuestions: [], staffApplicationQuestions: [], pluginInfo: '',
 };
+
+function minecraftSkinUrl(username: string) {
+  const name = username.trim();
+  return /^[a-zA-Z0-9_]{1,16}$/.test(name)
+    ? `https://mc-heads.net/body/${encodeURIComponent(name)}`
+    : '';
+}
+
+function reloadedImageUrl(source: string, reload: number) {
+  if (!reload) return source;
+  try {
+    const url = new URL(source, window.location.origin);
+    url.searchParams.set('skin-reload', String(reload));
+    return url.href;
+  } catch {
+    return source;
+  }
+}
+
+function setManagementSectionsOpen(open: boolean) {
+  document.querySelectorAll<HTMLDetailsElement>('.management-fold').forEach(section => {
+    section.open = open;
+  });
+}
 
 function Router() {
   const [location] = useLocation();
@@ -114,10 +138,19 @@ function CommunityHeader({ page }: { page: string }) {
 }
 
 function SkinPortrait({ member }: { member: Staff }) {
-  const [failed, setFailed] = useState(false);
   const username = member.minecraftUsername.trim();
-  const source = member.skinUrl?.trim() || "";
-  useEffect(() => setFailed(false), [source]);
+  const manualSource = member.skinUrl?.trim() || '';
+  const autoSource = minecraftSkinUrl(username);
+  const sources = [...new Set([manualSource, autoSource].filter(Boolean))];
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    setSourceIndex(0);
+    setFailed(false);
+    setReload(0);
+  }, [manualSource, username]);
+  const source = sources[sourceIndex] ?? '';
 
   return (
     <div className="staff-art">
@@ -128,10 +161,28 @@ function SkinPortrait({ member }: { member: Staff }) {
       )}
       {source && !failed && (
         <img
-          src={source}
+          key={`${source}-${reload}`}
+          src={reloadedImageUrl(source, reload)}
           alt={`${username || "Minecraft player"} skin`}
-          onError={() => setFailed(true)}
+          onError={() => {
+            if (sourceIndex < sources.length - 1) setSourceIndex(index => index + 1);
+            else setFailed(true);
+          }}
         />
+      )}
+      {failed && sources.length > 0 && (
+        <button
+          className="skin-retry"
+          type="button"
+          onClick={() => {
+            setSourceIndex(0);
+            setFailed(false);
+            setReload(value => value + 1);
+          }}
+          aria-label={`Reload ${username || 'staff'} skin`}
+        >
+          <RotateCw size={11} /> Reload skin
+        </button>
       )}
       <span className="staff-rank">{member.rank || "COMMUNITY"}</span>
     </div>
@@ -587,7 +638,7 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
     <main className="panel-shell">
       <aside className="panel-rail"><Brand dark /><div className="rail-label">LEGENDS / MANAGEMENT</div><div className="rail-decoration"><Compass size={30} strokeWidth={1.1} /><span>THE<br />KEEPER’S<br />POST</span></div><div className="rail-footer"><span className="pulse-dot" /> PRIVATE AREA</div></aside>
       <div className="panel-main">
-        <header className="panel-topbar"><Link href="/" className="back-home" data-testid="link-back-home"><ArrowRight className="back-arrow" size={14} /> Community site</Link><div className="panel-top-right"><ThemeToggle /><span className="secure-label"><LockKeyhole size={13} /> PROTECTED PANEL</span>{authorized && <button className="logout-button" onClick={doLogout} disabled={logout.isPending} data-testid="button-logout"><LogOut size={14} /> Sign out</button>}</div></header>
+        <header className="panel-topbar"><Link href="/" className="back-home" data-testid="link-back-home"><ArrowRight className="back-arrow" size={14} /> Community site</Link><div className="panel-top-right">{authorized && <div className="manage-fold-controls" aria-label="Panel section controls"><button type="button" onClick={() => setManagementSectionsOpen(false)} aria-label="Minimize all panel sections" title="Minimize all"><Minimize2 size={13} /><span>Minimize all</span></button><button type="button" onClick={() => setManagementSectionsOpen(true)} aria-label="Expand all panel sections" title="Expand all"><Maximize2 size={13} /><span>Expand all</span></button></div>}<ThemeToggle /><span className="secure-label"><LockKeyhole size={13} /> PROTECTED PANEL</span>{authorized && <button className="logout-button" onClick={doLogout} disabled={logout.isPending} data-testid="button-logout"><LogOut size={14} /> Sign out</button>}</div></header>
         {!authorized ? <section className="login-wrap">
           <div className="login-index"><span>LEGENDS SMP</span><span>01 / ACCESS</span></div>
           <div className="login-card">
@@ -610,38 +661,41 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
         </section> : (
           <section className="dashboard">
             <div className="dashboard-heading"><div><span className="section-kicker">LEGENDS SMP / {panel.toUpperCase()} CONTROL</span><h1>Good to have<br /><em>you back.</em></h1><p>Keep the community’s public details clear, current, and true to the world.</p></div><div className="access-seal"><ShieldCheck size={21} /><span>{session.role?.toUpperCase()}<small>SESSION ACTIVE</small></span></div></div>
-            {panel === 'owner' && <section className="owner-tools">
-              <div className="tool-heading"><span className="tool-icon"><KeyRound size={18} /></span><div><span className="section-kicker">OWNER ONLY</span><h2>Access credentials</h2><p>Replace a code any time. Leave a field blank to keep its current code.</p></div></div>
+            {panel === 'owner' && <details className="owner-tools management-fold" open>
+              <summary className="tool-heading fold-summary"><span className="tool-icon"><KeyRound size={18} /></span><div><span className="section-kicker">OWNER ONLY</span><h2>Access credentials</h2><p>Replace a code any time. Leave a field blank to keep its current code.</p></div><ChevronDown className="fold-chevron" size={17} /></summary>
               <form className="codes-form" onSubmit={saveCodes}>
                 <label>NEW STAFF ACCESS CODE<input data-testid="input-new-admin-code" type={showCodes ? 'text' : 'password'} minLength={8} value={adminCode} onChange={e => setAdminCode(e.target.value)} placeholder="At least 8 characters" /></label>
                 <label>NEW OWNER PASSWORD<input data-testid="input-new-owner-code" type={showCodes ? 'text' : 'password'} minLength={8} value={ownerCode} onChange={e => setOwnerCode(e.target.value)} placeholder="At least 8 characters" /></label>
                 <div className="code-actions"><button type="button" className="reveal-button" onClick={() => setShowCodes(!showCodes)} data-testid="button-reveal-codes">{showCodes ? <EyeOff size={14} /> : <Eye size={14} />}{showCodes ? 'Hide' : 'Show'} codes</button><button type="submit" className="button button-dark" disabled={updateCodes.isPending || (!adminCode && !ownerCode)} data-testid="button-save-codes">{updateCodes.isPending ? 'Updating…' : 'Update credentials'} <ArrowRight size={15} /></button></div>
               </form>
-            </section>}
+            </details>}
             <section className="editor-section">
               <div className="editor-top"><div><span className="section-kicker">PUBLIC SITE CONTENT</span><h2>Shape the world’s noticeboard.</h2><p>These changes are visible to every player who visits the community site.</p></div><button className="button button-dark save-button" onClick={saveContent} disabled={!dirty || updateContent.isPending || contentLoading} data-testid="button-save-content"><Save size={15} />{updateContent.isPending ? 'Saving…' : 'Save changes'}</button></div>
               {contentError ? <div className="editor-error" role="alert"><span>Could not load public content.</span><button onClick={() => retryContent()} data-testid="button-retry-editor">Retry loading</button></div> : contentLoading ? <div className="editor-skeleton"><i /><i /><i /></div> : (
                 <>
-                  <div className="core-fields"><label>SERVER ADDRESS<input data-testid="input-server-ip" value={content.serverIp} onChange={e => setContent(prev => ({ ...prev, serverIp: e.target.value }))} placeholder="Your Minecraft server address" /></label><label>CURRENT SEASON<input data-testid="input-season" value={content.season} onChange={e => setContent(prev => ({ ...prev, season: e.target.value }))} placeholder="The name of the current season" /></label></div>
-                  {panel === 'admin' && <section className="form-settings admin-form-settings">
-                    <div className="settings-title"><div><span className="section-kicker">ADMIN / COMMUNITY CARE</span><h3>Ban appeals</h3><p>Choose whether players can submit an appeal, and keep the questions clear.</p></div><label className="appeals-switch"><input type="checkbox" checked={content.banAppealsEnabled} onChange={e => setContent(prev => ({ ...prev, banAppealsEnabled: e.target.checked }))} /><span>{content.banAppealsEnabled ? 'Accepting appeals' : 'Appeals paused'}</span></label></div>
+                  <details className="panel-basics management-fold" open>
+                    <summary className="fold-heading"><span><span className="section-kicker">SITE BASICS</span><strong>Server details</strong></span><ChevronDown className="fold-chevron" size={17} /></summary>
+                    <div className="core-fields"><label>SERVER ADDRESS<input data-testid="input-server-ip" value={content.serverIp} onChange={e => setContent(prev => ({ ...prev, serverIp: e.target.value }))} placeholder="Your Minecraft server address" /></label><label>CURRENT SEASON<input data-testid="input-season" value={content.season} onChange={e => setContent(prev => ({ ...prev, season: e.target.value }))} placeholder="The name of the current season" /></label></div>
+                  </details>
+                  {panel === 'admin' && <details className="form-settings admin-form-settings management-fold" open>
+                    <summary className="settings-title fold-summary"><div><span className="section-kicker">ADMIN / COMMUNITY CARE</span><h3>Ban appeals</h3><p>Choose whether players can submit an appeal, and keep the questions clear.</p></div><label className="appeals-switch" onClick={event => event.stopPropagation()}><input type="checkbox" checked={content.banAppealsEnabled} onChange={e => setContent(prev => ({ ...prev, banAppealsEnabled: e.target.checked }))} /><span>{content.banAppealsEnabled ? 'Accepting appeals' : 'Appeals paused'}</span></label><ChevronDown className="fold-chevron" size={17} /></summary>
                     <QuestionEditor title="Appeal questions" questions={content.banAppealQuestions} onChange={questions => setContent(prev => ({ ...prev, banAppealQuestions: questions }))} />
-                  </section>}
-                  {panel === 'owner' && <section className="form-settings owner-form-settings">
-                    <div className="settings-title"><div><span className="section-kicker">OWNER / COMMUNITY INTAKE</span><h3>Staff applications</h3><p>Shape the questions players see when they apply to help the realm.</p></div></div>
+                  </details>}
+                  {panel === 'owner' && <details className="form-settings owner-form-settings management-fold" open>
+                    <summary className="settings-title fold-summary"><div><span className="section-kicker">OWNER / COMMUNITY INTAKE</span><h3>Staff applications</h3><p>Shape the questions players see when they apply to help the realm.</p></div><ChevronDown className="fold-chevron" size={17} /></summary>
                     <QuestionEditor title="Application questions" questions={content.staffApplicationQuestions} onChange={questions => setContent(prev => ({ ...prev, staffApplicationQuestions: questions }))} />
-                  </section>}
-                  {panel === 'owner' && <section className="form-settings plugin-info-settings" aria-labelledby="plugin-info-heading">
-                    <div className="settings-title"><div><span className="section-kicker">OWNER / PUBLIC PAGE</span><h3 id="plugin-info-heading">Plugin information</h3><p>This text appears on the public Plugin info page. Saving applies all pending public-content edits.</p></div></div>
+                  </details>}
+                  {panel === 'owner' && <details className="form-settings plugin-info-settings management-fold" aria-labelledby="plugin-info-heading" open>
+                    <summary className="settings-title fold-summary"><div><span className="section-kicker">OWNER / PUBLIC PAGE</span><h3 id="plugin-info-heading">Plugin information</h3><p>This text appears on the public Plugin info page. Saving applies all pending public-content edits.</p></div><ChevronDown className="fold-chevron" size={17} /></summary>
                     <label className="plugin-editor-label" htmlFor="plugin-info-content">PLUGIN & SERVER INFORMATION <small>Discord formatting: **bold**, *italic*, # headings, &gt; quotes, - lists, `code`</small></label>
                     <textarea id="plugin-info-content" data-testid="input-plugin-info" className="plugin-editor" rows={10} value={content.pluginInfo} onChange={e => setContent(prev => ({ ...prev, pluginInfo: e.target.value }))} placeholder={'**A few notes before you join**\n- Java Edition\n> Be kind to the world and each other'} />
                     <div className="plugin-editor-actions"><span>Published on the Plugin info page after saving.</span><button type="button" className="button button-dark" onClick={saveContent} disabled={!dirty || updateContent.isPending || contentLoading} data-testid="button-save-plugin-info"><Save size={14} />{updateContent.isPending ? 'Saving…' : 'Save changes'}</button></div>
-                  </section>}
+                  </details>}
                   {panel === 'admin' && <AppealReviews />}
                   {panel === 'owner' && <ApplicationReviews />}
                   <div className="editor-tabs" role="tablist">{(Object.keys(collectionMeta) as CollectionKey[]).map(key => <button key={key} role="tab" aria-selected={selected === key} className={selected === key ? 'editor-tab active-tab' : 'editor-tab'} onClick={() => setSelected(key)} data-testid={`tab-${key}`}><span>{collectionMeta[key].plural}</span><b>{content[key].length}</b></button>)}</div>
                   <div className="collection-head"><div><span className="section-kicker">{collectionMeta[selected].plural.toUpperCase()}</span><span className="collection-count">{list.length} {list.length === 1 ? 'entry' : 'entries'}</span></div><button className="add-entry" onClick={addItem} data-testid={`button-add-${selected}`}><Plus size={15} /> Add {collectionMeta[selected].label.toLowerCase()}</button></div>
-                  {list.length === 0 ? <div className="editor-empty"><span className="empty-icon"><Plus size={19} /></span><div><h3>Nothing here yet.</h3><p>Add the first {collectionMeta[selected].label.toLowerCase()} to publish it on the community site.</p></div></div> : <div className="entry-list">{list.map((item, index) => <article className="entry-card" key={item.id} data-testid={`editor-entry-${selected}-${item.id}`}><div className="entry-card-head"><span><b>{String(index + 1).padStart(2, '0')}</b> {collectionMeta[selected].label}</span><button onClick={() => removeItem(item.id)} aria-label={`Remove ${collectionMeta[selected].label.toLowerCase()}`} data-testid={`button-remove-${selected}-${item.id}`}><Trash2 size={15} /></button></div><div className="entry-fields">{collectionMeta[selected].fields.map(field => field.key === 'skinUrl' && selected === 'staff' ? <StaffImageField key={field.key} member={item as Staff} file={skinFiles[item.id]} onFile={file => setSkinFiles(prev => ({ ...prev, [item.id]: file }))} /> : field.boolean ? <label className="check-field" key={field.key}><input type="checkbox" checked={Boolean((item as unknown as Record<string, unknown>)[field.key])} onChange={e => patchItem(item.id, field.key, e.target.checked)} data-testid={`input-${selected}-${field.key}-${item.id}`} /><span>{field.label}</span></label> : <label key={field.key}>{field.label}{field.multiline ? <textarea value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} rows={3} /> : <input value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} />}</label>)}</div></article>)}</div>}
+                  {list.length === 0 ? <div className="editor-empty"><span className="empty-icon"><Plus size={19} /></span><div><h3>Nothing here yet.</h3><p>Add the first {collectionMeta[selected].label.toLowerCase()} to publish it on the community site.</p></div></div> : <div className="entry-list">{list.map((item, index) => <article className="entry-card" key={item.id} data-testid={`editor-entry-${selected}-${item.id}`}><div className="entry-card-head"><span><b>{String(index + 1).padStart(2, '0')}</b> {collectionMeta[selected].label}</span><button onClick={() => removeItem(item.id)} aria-label={`Remove ${collectionMeta[selected].label.toLowerCase()}`} data-testid={`button-remove-${selected}-${item.id}`}><Trash2 size={15} /></button></div><details className="entry-fold management-fold" open><summary className="entry-fold-summary">Edit details <ChevronDown className="fold-chevron" size={15} /></summary><div className="entry-fields">{collectionMeta[selected].fields.map(field => field.key === 'skinUrl' && selected === 'staff' ? <StaffImageField key={field.key} member={item as Staff} file={skinFiles[item.id]} onFile={file => setSkinFiles(prev => ({ ...prev, [item.id]: file }))} onSkinUrlChange={url => { setContent(prev => ({ ...prev, staff: prev.staff.map(member => member.id === item.id ? { ...member, skinUrl: url || null } : member) })); setSkinFiles(prev => { const next = { ...prev }; delete next[item.id]; return next; }); }} /> : field.boolean ? <label className="check-field" key={field.key}><input type="checkbox" checked={Boolean((item as unknown as Record<string, unknown>)[field.key])} onChange={e => patchItem(item.id, field.key, e.target.checked)} data-testid={`input-${selected}-${field.key}-${item.id}`} /><span>{field.label}</span></label> : <label key={field.key}>{field.label}{field.multiline ? <textarea value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} rows={3} /> : <input value={String((item as unknown as Record<string, unknown>)[field.key] ?? '')} onChange={e => patchItem(item.id, field.key, e.target.value)} data-testid={`input-${selected}-${field.key}-${item.id}`} />}</label>)}</div></details></article>)}</div>}
                 </>
               )}
               {saveMessage && <p className={saveMessage.startsWith('Could') ? 'save-feedback save-error' : 'save-feedback'} role="status" data-testid="status-save-message"><Check size={14} />{saveMessage}</p>}
@@ -661,20 +715,33 @@ function QuestionEditor({ title, questions, onChange }: { title: string; questio
     onChange([...questions, { id: `question-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label: label.trim(), required: true }]);
     setLabel('');
   };
-  return <div className="question-editor"><div className="question-editor-label"><span>{title}</span><span>{questions.length} {questions.length === 1 ? 'question' : 'questions'}</span></div>{questions.length ? questions.map((question, index) => <div className="managed-question" key={question.id}><span className="managed-question-number">{String(index + 1).padStart(2, '0')}</span><input aria-label={`Question ${index + 1}`} value={question.label} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, label: e.target.value } : item))} placeholder="Write a clear, welcoming question" /><label className="required-control"><input type="checkbox" checked={question.required} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, required: e.target.checked } : item))} />Required</label><button type="button" className="remove-question" aria-label={`Remove question ${index + 1}`} onClick={() => onChange(questions.filter(item => item.id !== question.id))}><X size={15} /></button></div>) : <p className="no-questions">No custom questions yet. Public forms will use the community starter questions until you add your own.</p>}<div className="add-question-row"><input value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder="Add a question for players" /><button type="button" className="button button-dark" onClick={add} disabled={!label.trim()}><Plus size={14} /> Add question</button></div></div>;
+  return <details className="question-editor management-fold" open><summary className="question-editor-label fold-summary"><span>{title}</span><span>{questions.length} {questions.length === 1 ? 'question' : 'questions'}<ChevronDown className="fold-chevron" size={15} /></span></summary><div className="question-editor-body">{questions.length ? questions.map((question, index) => <div className="managed-question" key={question.id}><span className="managed-question-number">{String(index + 1).padStart(2, '0')}</span><input aria-label={`Question ${index + 1}`} value={question.label} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, label: e.target.value } : item))} placeholder="Write a clear, welcoming question" /><label className="required-control"><input type="checkbox" checked={question.required} onChange={e => onChange(questions.map(item => item.id === question.id ? { ...item, required: e.target.checked } : item))} />Required</label><button type="button" className="remove-question" aria-label={`Remove question ${index + 1}`} onClick={() => onChange(questions.filter(item => item.id !== question.id))}><X size={15} /></button></div>) : <p className="no-questions">No custom questions yet. Public forms will use the community starter questions until you add your own.</p>}<div className="add-question-row"><input value={label} onChange={e => setLabel(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder="Add a question for players" /><button type="button" className="button button-dark" onClick={add} disabled={!label.trim()}><Plus size={14} /> Add question</button></div></div></details>;
 }
 
-function StaffImageField({ member, file, onFile }: { member: Staff; file?: File; onFile: (file: File) => void }) {
+function StaffImageField({ member, file, onFile, onSkinUrlChange }: { member: Staff; file?: File; onFile: (file: File) => void; onSkinUrlChange: (url: string) => void }) {
   const [invalid, setInvalid] = useState('');
   const [localPreview, setLocalPreview] = useState('');
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [previewReload, setPreviewReload] = useState(0);
   useEffect(() => {
     if (!file) { setLocalPreview(''); return; }
     const url = URL.createObjectURL(file);
     setLocalPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  const preview = localPreview || member.skinUrl || '';
-  return <div className="staff-image-editor"><span className="upload-label">STAFF IMAGE</span><div className="image-upload-control"><div className="staff-image-preview">{preview ? <img src={preview} alt={`${member.displayName || member.minecraftUsername || 'Staff'} image preview`} /> : <span>{(member.minecraftUsername || 'L').slice(0, 1).toUpperCase()}</span>}</div><div className="upload-prompt"><label className="upload-button"><Upload size={14} />{file ? 'Choose another image' : member.skinUrl ? 'Replace image' : 'Upload staff image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const picked = event.currentTarget.files?.[0]; if (!picked) return; if (!['image/png', 'image/jpeg', 'image/webp'].includes(picked.type) || picked.size > 5 * 1024 * 1024) { setInvalid('Choose a PNG, JPG, or WebP image up to 5 MB.'); event.currentTarget.value = ''; return; } setInvalid(''); onFile(picked); }} /></label><p>PNG, JPG, or WebP · up to 5 MB. Image uploads when you save.</p>{file && <span className="selected-file">{file.name}</span>}{invalid && <span className="upload-error" role="alert">{invalid}</span>}</div></div></div>;
+  const preview = localPreview || member.skinUrl?.trim() || minecraftSkinUrl(member.minecraftUsername);
+  useEffect(() => {
+    setPreviewFailed(false);
+    setPreviewReload(0);
+  }, [preview]);
+  const useMinecraftSkin = () => {
+    const url = minecraftSkinUrl(member.minecraftUsername);
+    if (!url) return;
+    onSkinUrlChange(url);
+    setPreviewFailed(false);
+    setPreviewReload(value => value + 1);
+  };
+  return <div className="staff-image-editor"><span className="upload-label">STAFF IMAGE</span><div className="image-upload-control"><div className="staff-image-preview">{preview && !previewFailed ? <img key={`${preview}-${previewReload}`} src={reloadedImageUrl(preview, previewReload)} alt={`${member.displayName || member.minecraftUsername || 'Staff'} image preview`} onError={() => setPreviewFailed(true)} /> : <span>{(member.minecraftUsername || 'L').slice(0, 1).toUpperCase()}</span>}</div><div className="upload-prompt"><div className="staff-image-actions"><label className="upload-button"><Upload size={14} />{file ? 'Choose another image' : member.skinUrl ? 'Replace image' : 'Upload image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => { const picked = event.currentTarget.files?.[0]; if (!picked) return; if (!['image/png', 'image/jpeg', 'image/webp'].includes(picked.type) || picked.size > 5 * 1024 * 1024) { setInvalid('Choose a PNG, JPG, or WebP image up to 5 MB.'); event.currentTarget.value = ''; return; } setInvalid(''); onFile(picked); }} /></label><button className="upload-button" type="button" disabled={!minecraftSkinUrl(member.minecraftUsername)} onClick={useMinecraftSkin}><Users size={13} />Use Minecraft skin</button>{preview && <button className="upload-button" type="button" onClick={() => { setPreviewFailed(false); setPreviewReload(value => value + 1); }}><RotateCw size={13} />Reload preview</button>}</div><label className="skin-url-field">IMAGE URL<input type="url" value={member.skinUrl ?? ''} onChange={event => onSkinUrlChange(event.target.value)} placeholder="https://example.com/image.png" /></label><p>Upload PNG, JPG, or WebP up to 5 MB, paste an image URL, or leave the URL blank to auto-load the Minecraft skin. Uploads save to R2 on Cloudflare.</p>{file && <span className="selected-file">{file.name}</span>}{previewFailed && <span className="upload-error" role="status">Preview did not load. Check the URL or reload the preview.</span>}{invalid && <span className="upload-error" role="alert">{invalid}</span>}</div></div></div>;
 }
 
 function AppealReviews() {
@@ -702,7 +769,10 @@ function ApplicationReviews() {
 }
 
 function ReviewSection({ title, kicker, description, items, questions = [], loading, error, retry, onStatus, pendingId }: { title: string; kicker: string; description: string; items?: CommunityFormSubmission[]; questions?: FormQuestion[]; loading: boolean; error: boolean; retry: () => void; onStatus: (id: string, status: 'pending' | 'accepted' | 'declined') => void; pendingId?: string }) {
-  return <section className="review-section"><div className="review-head"><div><span className="section-kicker">{kicker}</span><h3>{title}</h3><p>{description}</p></div><span className="review-count">{items?.length ?? 0}<small>SUBMISSIONS</small></span></div>{error ? <div className="review-state error"><p>Submissions could not be loaded.</p><button type="button" onClick={retry}>Try again</button></div> : loading ? <div className="review-loading"><i /><i /><i /></div> : !items?.length ? <div className="review-state"><Compass size={20} /><p>No submissions to review yet. New responses will appear here.</p></div> : <div className="submission-list">{items.map((item, index) => <article className="review-card" key={item.id}><div className="review-card-top"><div><span className="review-number">{String(index + 1).padStart(2, '0')}</span><h4>{item.minecraftUsername}</h4><span className="review-discord">{item.discordUsername}</span></div><span className={`status-pill status-${item.status}`}>{item.status}</span></div><time>{new Date(item.createdAt).toLocaleString()}</time><div className="review-answers">{(item.answers ?? []).map((answer, i) => <div key={`${answer.questionId}-${i}`}><h5>{questions.find(question => question.id === answer.questionId)?.label || `Response ${i + 1}`}</h5><p>{answer.answer}</p></div>)}</div><div className="review-actions"><span>REVIEW STATUS</span><div>{(['pending', 'accepted', 'declined'] as const).map(status => <button key={status} type="button" className={item.status === status ? `status-choice selected ${status}` : 'status-choice'} disabled={pendingId === item.id} onClick={() => onStatus(item.id, status)}>{status[0].toUpperCase() + status.slice(1)}</button>)}</div></div></article>)}</div>}</section>;
+  return <details className="review-section management-fold" open>
+    <summary className="review-head fold-summary"><div><span className="section-kicker">{kicker}</span><h3>{title}</h3><p>{description}</p></div><span className="review-count">{items?.length ?? 0}<small>SUBMISSIONS</small></span><ChevronDown className="fold-chevron" size={17} /></summary>
+    <div className="review-content">{error ? <div className="review-state error"><p>Submissions could not be loaded.</p><button type="button" onClick={retry}>Try again</button></div> : loading ? <div className="review-loading"><i /><i /><i /></div> : !items?.length ? <div className="review-state"><Compass size={20} /><p>No submissions to review yet. New responses will appear here.</p></div> : <div className="submission-list">{items.map((item, index) => <details className="review-card management-fold" key={item.id} open><summary className="review-card-top fold-summary"><div><span className="review-number">{String(index + 1).padStart(2, '0')}</span><h4>{item.minecraftUsername}</h4><span className="review-discord">{item.discordUsername}</span></div><span className="review-card-status"><span className={`status-pill status-${item.status}`}>{item.status}</span><ChevronDown className="fold-chevron" size={14} /></span></summary><div className="review-card-body"><time>{new Date(item.createdAt).toLocaleString()}</time><div className="review-answers">{(item.answers ?? []).map((answer, i) => <div key={`${answer.questionId}-${i}`}><h5>{questions.find(question => question.id === answer.questionId)?.label || `Response ${i + 1}`}</h5><p>{answer.answer}</p></div>)}</div><div className="review-actions"><span>REVIEW STATUS</span><div>{(['pending', 'accepted', 'declined'] as const).map(status => <button key={status} type="button" className={item.status === status ? `status-choice selected ${status}` : 'status-choice'} disabled={pendingId === item.id} onClick={() => onStatus(item.id, status)}>{status[0].toUpperCase() + status.slice(1)}</button>)}</div></div></div></details>)}</div>}</div>
+  </details>;
 }
 
 function PanelLoading() {
