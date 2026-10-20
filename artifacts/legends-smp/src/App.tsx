@@ -630,7 +630,12 @@ function ManagementPanel({ panel }: { panel: 'admin' | 'owner' }) {
                   {panel === 'owner' && <section className="form-settings owner-form-settings">
                     <div className="settings-title"><div><span className="section-kicker">OWNER / COMMUNITY INTAKE</span><h3>Staff applications</h3><p>Shape the questions players see when they apply to help the realm.</p></div></div>
                     <QuestionEditor title="Application questions" questions={content.staffApplicationQuestions} onChange={questions => setContent(prev => ({ ...prev, staffApplicationQuestions: questions }))} />
-                    <label className="plugin-editor-label">PLUGIN & SERVER INFORMATION <small>Discord-style formatting: **bold**, *italic*, &gt; quote, - list, `code`</small><textarea className="plugin-editor" rows={10} value={content.pluginInfo} onChange={e => setContent(prev => ({ ...prev, pluginInfo: e.target.value }))} placeholder={'**A few notes before you join**\\n- Java Edition\\n> Be kind to the world and each other'} /></label>
+                  </section>}
+                  {panel === 'owner' && <section className="form-settings plugin-info-settings" aria-labelledby="plugin-info-heading">
+                    <div className="settings-title"><div><span className="section-kicker">OWNER / PUBLIC PAGE</span><h3 id="plugin-info-heading">Plugin information</h3><p>This text appears on the public Plugin info page. Saving applies all pending public-content edits.</p></div></div>
+                    <label className="plugin-editor-label" htmlFor="plugin-info-content">PLUGIN & SERVER INFORMATION <small>Discord formatting: **bold**, *italic*, # headings, &gt; quotes, - lists, `code`</small></label>
+                    <textarea id="plugin-info-content" data-testid="input-plugin-info" className="plugin-editor" rows={10} value={content.pluginInfo} onChange={e => setContent(prev => ({ ...prev, pluginInfo: e.target.value }))} placeholder={'**A few notes before you join**\n- Java Edition\n> Be kind to the world and each other'} />
+                    <div className="plugin-editor-actions"><span>Published on the Plugin info page after saving.</span><button type="button" className="button button-dark" onClick={saveContent} disabled={!dirty || updateContent.isPending || contentLoading} data-testid="button-save-plugin-info"><Save size={14} />{updateContent.isPending ? 'Saving…' : 'Save changes'}</button></div>
                   </section>}
                   {panel === 'admin' && <AppealReviews />}
                   {panel === 'owner' && <ApplicationReviews />}
