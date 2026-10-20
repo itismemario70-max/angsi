@@ -30,3 +30,6 @@ export * from './ruleEntry';
 export * from './siteContent';
 export * from './siteContentInput';
 export * from './staffMember';
+export * from './websiteColors';
+export * from './websiteSettings';
+export * from './websiteSettingsCopy';

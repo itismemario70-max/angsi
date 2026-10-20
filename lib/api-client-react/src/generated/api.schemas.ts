@@ -106,6 +106,30 @@ export interface CommunityFormStatusResult {
   updated: boolean;
 }
 
+export interface WebsiteColors {
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  forest: string;
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  forestDeep: string;
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  paper: string;
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  paperBright: string;
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  gold: string;
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  rust: string;
+  /** @pattern ^#[A-Fa-f0-9]{6}$ */
+  ink: string;
+}
+
+export type WebsiteSettingsCopy = {[key: string]: string};
+
+export interface WebsiteSettings {
+  colors: WebsiteColors;
+  copy: WebsiteSettingsCopy;
+}
+
 export interface SiteContent {
   serverIp: string;
   season: string;
@@ -118,6 +142,7 @@ export interface SiteContent {
   banAppealQuestions: FormQuestion[];
   staffApplicationQuestions: FormQuestion[];
   pluginInfo: string;
+  website: WebsiteSettings;
 }
 
 export interface SiteContentInput {
@@ -132,6 +157,7 @@ export interface SiteContentInput {
   banAppealQuestions: FormQuestion[];
   staffApplicationQuestions: FormQuestion[];
   pluginInfo: string;
+  website: WebsiteSettings;
 }
 
 export type PanelLoginInputPanel = typeof PanelLoginInputPanel[keyof typeof PanelLoginInputPanel];

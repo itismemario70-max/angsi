@@ -443,6 +443,8 @@ components:
             $ref: "#/components/schemas/FormQuestion"
         pluginInfo:
           type: string
+        website:
+          $ref: "#/components/schemas/WebsiteSettings"
       required:
         - serverIp
         - season
@@ -455,6 +457,7 @@ components:
         - banAppealQuestions
         - staffApplicationQuestions
         - pluginInfo
+        - website
     SiteContentInput:
       type: object
       properties:
@@ -494,6 +497,8 @@ components:
             $ref: "#/components/schemas/FormQuestion"
         pluginInfo:
           type: string
+        website:
+          $ref: "#/components/schemas/WebsiteSettings"
       required:
         - serverIp
         - season
@@ -506,6 +511,77 @@ components:
         - banAppealQuestions
         - staffApplicationQuestions
         - pluginInfo
+        - website
+    WebsiteSettings:
+      type: object
+      properties:
+        colors:
+          $ref: "#/components/schemas/WebsiteColors"
+        copy:
+          type: object
+          additionalProperties:
+            type: string
+      required: [colors, copy]
+    WebsiteColors:
+      type: object
+      properties:
+        forest:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        forestDeep:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        paper:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        paperBright:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        gold:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        rust:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        ink:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkForest:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkForestDeep:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkPaper:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkPaperBright:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkGold:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkRust:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+        darkInk:
+          type: string
+          pattern: "^#[A-Fa-f0-9]{6}$"
+      required:
+        - forest
+        - forestDeep
+        - paper
+        - paperBright
+        - gold
+        - rust
+        - ink
+        - darkForest
+        - darkForestDeep
+        - darkPaper
+        - darkPaperBright
+        - darkGold
+        - darkRust
+        - darkInk
     PanelLoginInput:
       type: object
       properties:

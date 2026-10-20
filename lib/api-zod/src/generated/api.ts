@@ -20,6 +20,15 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get the public Legends SMP site content
  */
+export const getLegendsContentResponseWebsiteColorsForestRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const getLegendsContentResponseWebsiteColorsForestDeepRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const getLegendsContentResponseWebsiteColorsPaperRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const getLegendsContentResponseWebsiteColorsPaperBrightRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const getLegendsContentResponseWebsiteColorsGoldRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const getLegendsContentResponseWebsiteColorsRustRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const getLegendsContentResponseWebsiteColorsInkRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+
+
 export const GetLegendsContentResponse = zod.object({
   "serverIp": zod.string(),
   "season": zod.string(),
@@ -65,7 +74,19 @@ export const GetLegendsContentResponse = zod.object({
   "label": zod.string(),
   "required": zod.boolean()
 })),
-  "pluginInfo": zod.string()
+  "pluginInfo": zod.string(),
+  "website": zod.object({
+  "colors": zod.object({
+  "forest": zod.string().regex(getLegendsContentResponseWebsiteColorsForestRegExp),
+  "forestDeep": zod.string().regex(getLegendsContentResponseWebsiteColorsForestDeepRegExp),
+  "paper": zod.string().regex(getLegendsContentResponseWebsiteColorsPaperRegExp),
+  "paperBright": zod.string().regex(getLegendsContentResponseWebsiteColorsPaperBrightRegExp),
+  "gold": zod.string().regex(getLegendsContentResponseWebsiteColorsGoldRegExp),
+  "rust": zod.string().regex(getLegendsContentResponseWebsiteColorsRustRegExp),
+  "ink": zod.string().regex(getLegendsContentResponseWebsiteColorsInkRegExp)
+}),
+  "copy": zod.record(zod.string(), zod.string())
+})
 })
 
 
@@ -108,6 +129,15 @@ export const LogoutLegendsPanelResponse = zod.object({
  * Requires an admin or owner panel session.
  * @summary Replace editable public site content
  */
+export const updateLegendsContentBodyWebsiteColorsForestRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentBodyWebsiteColorsForestDeepRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentBodyWebsiteColorsPaperRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentBodyWebsiteColorsPaperBrightRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentBodyWebsiteColorsGoldRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentBodyWebsiteColorsRustRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentBodyWebsiteColorsInkRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+
+
 export const UpdateLegendsContentBody = zod.object({
   "serverIp": zod.string(),
   "season": zod.string(),
@@ -153,8 +183,29 @@ export const UpdateLegendsContentBody = zod.object({
   "label": zod.string(),
   "required": zod.boolean()
 })),
-  "pluginInfo": zod.string()
+  "pluginInfo": zod.string(),
+  "website": zod.object({
+  "colors": zod.object({
+  "forest": zod.string().regex(updateLegendsContentBodyWebsiteColorsForestRegExp),
+  "forestDeep": zod.string().regex(updateLegendsContentBodyWebsiteColorsForestDeepRegExp),
+  "paper": zod.string().regex(updateLegendsContentBodyWebsiteColorsPaperRegExp),
+  "paperBright": zod.string().regex(updateLegendsContentBodyWebsiteColorsPaperBrightRegExp),
+  "gold": zod.string().regex(updateLegendsContentBodyWebsiteColorsGoldRegExp),
+  "rust": zod.string().regex(updateLegendsContentBodyWebsiteColorsRustRegExp),
+  "ink": zod.string().regex(updateLegendsContentBodyWebsiteColorsInkRegExp)
+}),
+  "copy": zod.record(zod.string(), zod.string())
 })
+})
+
+export const updateLegendsContentResponseWebsiteColorsForestRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentResponseWebsiteColorsForestDeepRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentResponseWebsiteColorsPaperRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentResponseWebsiteColorsPaperBrightRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentResponseWebsiteColorsGoldRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentResponseWebsiteColorsRustRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+export const updateLegendsContentResponseWebsiteColorsInkRegExp = new RegExp('^#[A-Fa-f0-9]{6}$');
+
 
 export const UpdateLegendsContentResponse = zod.object({
   "serverIp": zod.string(),
@@ -201,7 +252,19 @@ export const UpdateLegendsContentResponse = zod.object({
   "label": zod.string(),
   "required": zod.boolean()
 })),
-  "pluginInfo": zod.string()
+  "pluginInfo": zod.string(),
+  "website": zod.object({
+  "colors": zod.object({
+  "forest": zod.string().regex(updateLegendsContentResponseWebsiteColorsForestRegExp),
+  "forestDeep": zod.string().regex(updateLegendsContentResponseWebsiteColorsForestDeepRegExp),
+  "paper": zod.string().regex(updateLegendsContentResponseWebsiteColorsPaperRegExp),
+  "paperBright": zod.string().regex(updateLegendsContentResponseWebsiteColorsPaperBrightRegExp),
+  "gold": zod.string().regex(updateLegendsContentResponseWebsiteColorsGoldRegExp),
+  "rust": zod.string().regex(updateLegendsContentResponseWebsiteColorsRustRegExp),
+  "ink": zod.string().regex(updateLegendsContentResponseWebsiteColorsInkRegExp)
+}),
+  "copy": zod.record(zod.string(), zod.string())
+})
 })
 
 

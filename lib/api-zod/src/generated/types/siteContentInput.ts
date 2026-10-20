@@ -11,6 +11,7 @@ import type { FormQuestion } from './formQuestion';
 import type { PunishmentSet } from './punishmentSet';
 import type { RuleEntry } from './ruleEntry';
 import type { StaffMember } from './staffMember';
+import type { WebsiteSettings } from './websiteSettings';
 
 export interface SiteContentInput {
   serverIp: string;
@@ -24,4 +25,5 @@ export interface SiteContentInput {
   banAppealQuestions: FormQuestion[];
   staffApplicationQuestions: FormQuestion[];
   pluginInfo: string;
+  website: WebsiteSettings;
 }

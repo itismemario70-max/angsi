@@ -98,6 +98,25 @@ const emptyContent = {
   rules: [],
   punishments: [],
   events: [],
+  website: {
+    colors: {
+      forest: "#263d32",
+      forestDeep: "#1c3028",
+      paper: "#f1eee3",
+      paperBright: "#f8f6ee",
+      gold: "#d6b66f",
+      rust: "#b56c50",
+      ink: "#283b31",
+      darkForest: "#17231f",
+      darkForestDeep: "#111a17",
+      darkPaper: "#202a27",
+      darkPaperBright: "#293530",
+      darkGold: "#d4b671",
+      darkRust: "#d28b6d",
+      darkInk: "#e2e2d2",
+    },
+    copy: {},
+  },
 };
 
 const loginAttempts = new Map<
@@ -137,7 +156,26 @@ function normalizeContent(input: unknown) {
     input && typeof input === "object" && !Array.isArray(input)
       ? (input as Record<string, unknown>)
       : {};
-  return GetLegendsContentResponse.parse({ ...emptyContent, ...stored });
+  const storedWebsite =
+    stored.website && typeof stored.website === "object" && !Array.isArray(stored.website)
+      ? (stored.website as Record<string, unknown>)
+      : {};
+  const storedColors =
+    storedWebsite.colors && typeof storedWebsite.colors === "object" && !Array.isArray(storedWebsite.colors)
+      ? (storedWebsite.colors as Record<string, unknown>)
+      : {};
+  const storedCopy =
+    storedWebsite.copy && typeof storedWebsite.copy === "object" && !Array.isArray(storedWebsite.copy)
+      ? (storedWebsite.copy as Record<string, unknown>)
+      : {};
+  return GetLegendsContentResponse.parse({
+    ...emptyContent,
+    ...stored,
+    website: {
+      colors: { ...emptyContent.website.colors, ...storedColors },
+      copy: { ...emptyContent.website.copy, ...storedCopy },
+    },
+  });
 }
 
 function deriveKey(code: string, salt: string): Promise<Buffer> {
@@ -657,6 +695,7 @@ async function handleLegendsApi(
             ...parsed.data,
             staffApplicationQuestions: normalizeContent(settings.content).staffApplicationQuestions,
             pluginInfo: normalizeContent(settings.content).pluginInfo,
+            website: normalizeContent(settings.content).website,
           }
         : parsed.data;
     const saved = await env.DB.prepare(`
