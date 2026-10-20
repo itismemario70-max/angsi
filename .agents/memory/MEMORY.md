@@ -1,1 +1,2 @@
 - [Legends SMP site structure](legends-smp-site-structure.md) — keep content sections on separate pages, with a home staff preview and persistent light/dark mode.
+- [Legends SMP commit policy](legends-smp-workflow.md) — commit every project change; report local commits and GitHub pushes separately.

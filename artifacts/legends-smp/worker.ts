@@ -25,6 +25,10 @@ import {
   UpdateBanAppealStatusResponse,
   UpdateStaffApplicationStatusBody,
   UpdateStaffApplicationStatusResponse,
+  RequestStaffSkinUploadBody,
+  RequestStaffSkinUploadResponse,
+  FinalizeStaffSkinUploadBody,
+  FinalizeStaffSkinUploadResponse,
 } from "@workspace/api-zod";
 
 interface D1RunResult {
@@ -43,9 +47,30 @@ interface D1Database {
   prepare(query: string): D1PreparedStatement;
 }
 
+interface R2StoredObject {
+  arrayBuffer(): Promise<ArrayBuffer>;
+  size: number;
+  httpMetadata?: { contentType?: string };
+  customMetadata?: Record<string, string>;
+}
+
+interface R2Bucket {
+  get(key: string): Promise<R2StoredObject | null>;
+  put(
+    key: string,
+    value: string | ArrayBuffer | Uint8Array,
+    options?: {
+      httpMetadata?: { contentType?: string };
+      customMetadata?: Record<string, string>;
+    },
+  ): Promise<unknown>;
+  delete(key: string): Promise<void>;
+}
+
 interface WorkerEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   DB: D1Database;
+  SKIN_IMAGES?: R2Bucket;
   LEGENDS_ADMIN_CODE?: string;
   LEGENDS_OWNER_CODE?: string;
   SESSION_SECRET?: string;
@@ -79,6 +104,9 @@ const SESSION_COOKIE = "legends_panel";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const LOCKOUT_MS = 10 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 6;
+const MAX_STAFF_IMAGE_BYTES = 5 * 1024 * 1024;
+const STAFF_UPLOAD_TTL_MS = 15 * 60 * 1000;
+type StaffImageContentType = "image/png" | "image/jpeg" | "image/webp";
 
 const emptyContent = {
   serverIp: "",
@@ -735,12 +763,286 @@ async function handleLegendsApi(
   return jsonResponse({ error: "Not found." }, 404);
 }
 
+function isStaffImageContentType(value: string | undefined): value is StaffImageContentType {
+  return value === "image/png" || value === "image/jpeg" || value === "image/webp";
+}
+
+function detectStaffImageContentType(bytes: Uint8Array): StaffImageContentType | null {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+async function handleSkinStorageApi(
+  request: Request,
+  env: WorkerEnv,
+): Promise<Response> {
+  const { pathname } = new URL(request.url);
+  const bucket = env.SKIN_IMAGES;
+
+  if (
+    pathname === "/api/storage/uploads/request-url" &&
+    request.method === "POST"
+  ) {
+    const settings = await getSettings(env);
+    if (!(await getActiveRole(request, settings, env))) {
+      return jsonResponse({ error: "Admin panel access is required." }, 401);
+    }
+    if (!bucket) {
+      return jsonResponse({ error: "Staff image storage is not configured." }, 503);
+    }
+
+    const parsed = RequestStaffSkinUploadBody.safeParse(
+      await parseRequestBody(request),
+    );
+    if (!parsed.success) {
+      return jsonResponse(
+        { error: "Upload a PNG, JPG, or WebP image under 5 MB." },
+        400,
+      );
+    }
+
+    const uploadId = crypto.randomUUID();
+    const expiresAt = Date.now() + STAFF_UPLOAD_TTL_MS;
+    await bucket.put(
+      `pending/${uploadId}.json`,
+      JSON.stringify({
+        size: parsed.data.size,
+        contentType: parsed.data.contentType,
+        expiresAt,
+      }),
+      { httpMetadata: { contentType: "application/json" } },
+    );
+    const uploadURL = new URL(
+      `/api/storage/uploads/${uploadId}`,
+      request.url,
+    ).toString();
+    return jsonResponse(
+      RequestStaffSkinUploadResponse.parse({
+        uploadURL,
+        objectPath: `/objects/uploads/${uploadId}`,
+      }),
+    );
+  }
+
+  const uploadMatch = pathname.match(
+    /^\/api\/storage\/uploads\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  );
+  if (uploadMatch && request.method === "PUT") {
+    const settings = await getSettings(env);
+    if (!(await getActiveRole(request, settings, env))) {
+      return jsonResponse({ error: "Admin panel access is required." }, 401);
+    }
+    if (!bucket) {
+      return jsonResponse({ error: "Staff image storage is not configured." }, 503);
+    }
+
+    const uploadId = uploadMatch[1];
+    const reservationKey = `pending/${uploadId}.json`;
+    const reservationObject = await bucket.get(reservationKey);
+    if (!reservationObject) {
+      return jsonResponse({ error: "Upload request not found." }, 404);
+    }
+
+    let reservation: {
+      size?: unknown;
+      contentType?: unknown;
+      expiresAt?: unknown;
+    };
+    try {
+      reservation = JSON.parse(
+        new TextDecoder().decode(await reservationObject.arrayBuffer()),
+      ) as typeof reservation;
+    } catch {
+      await bucket.delete(reservationKey);
+      return jsonResponse({ error: "Upload request is invalid." }, 400);
+    }
+    if (
+      typeof reservation.size !== "number" ||
+      !Number.isInteger(reservation.size) ||
+      reservation.size < 1 ||
+      reservation.size > MAX_STAFF_IMAGE_BYTES ||
+      !isStaffImageContentType(
+        typeof reservation.contentType === "string"
+          ? reservation.contentType
+          : undefined,
+      ) ||
+      typeof reservation.expiresAt !== "number"
+    ) {
+      await bucket.delete(reservationKey);
+      return jsonResponse({ error: "Upload request is invalid." }, 400);
+    }
+    if (reservation.expiresAt <= Date.now()) {
+      await bucket.delete(reservationKey);
+      return jsonResponse({ error: "Upload request expired. Choose the image again." }, 410);
+    }
+
+    const contentLengthHeader = request.headers.get("content-length");
+    if (
+      contentLengthHeader &&
+      Number(contentLengthHeader) !== reservation.size
+    ) {
+      return jsonResponse({ error: "Image size does not match the upload request." }, 400);
+    }
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    const headerContentType = request.headers
+      .get("content-type")
+      ?.split(";")[0]
+      .trim()
+      .toLowerCase();
+    const detectedContentType = detectStaffImageContentType(bytes);
+    if (
+      bytes.byteLength !== reservation.size ||
+      bytes.byteLength > MAX_STAFF_IMAGE_BYTES ||
+      !detectedContentType ||
+      detectedContentType !== reservation.contentType ||
+      detectedContentType !== headerContentType
+    ) {
+      return jsonResponse({ error: "Choose a valid PNG, JPG, or WebP image." }, 400);
+    }
+
+    await bucket.put(`uploads/${uploadId}`, bytes, {
+      httpMetadata: { contentType: detectedContentType },
+      customMetadata: { state: "pending", expiresAt: String(reservation.expiresAt) },
+    });
+    await bucket.delete(reservationKey);
+    return new Response(null, { status: 204 });
+  }
+
+  if (
+    pathname === "/api/storage/uploads/finalize" &&
+    request.method === "POST"
+  ) {
+    const settings = await getSettings(env);
+    if (!(await getActiveRole(request, settings, env))) {
+      return jsonResponse({ error: "Admin panel access is required." }, 401);
+    }
+    if (!bucket) {
+      return jsonResponse({ error: "Staff image storage is not configured." }, 503);
+    }
+
+    const parsed = FinalizeStaffSkinUploadBody.safeParse(
+      await parseRequestBody(request),
+    );
+    if (!parsed.success) {
+      return jsonResponse({ error: "The image upload is invalid." }, 400);
+    }
+    const objectPathMatch = parsed.data.objectPath.match(
+      /^\/objects\/uploads\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+    );
+    if (!objectPathMatch) {
+      return jsonResponse({ error: "The image upload is invalid." }, 400);
+    }
+
+    const uploadId = objectPathMatch[1];
+    const objectKey = `uploads/${uploadId}`;
+    const uploadedObject = await bucket.get(objectKey);
+    if (!uploadedObject || uploadedObject.customMetadata?.state !== "pending") {
+      return jsonResponse({ error: "The uploaded image could not be found." }, 400);
+    }
+    const expiresAt = Number(uploadedObject.customMetadata.expiresAt);
+    if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) {
+      await bucket.delete(objectKey);
+      return jsonResponse({ error: "Upload expired. Choose the image again." }, 410);
+    }
+
+    const contentType = uploadedObject.httpMetadata?.contentType;
+    const bytes = new Uint8Array(await uploadedObject.arrayBuffer());
+    if (
+      !isStaffImageContentType(contentType) ||
+      bytes.byteLength !== uploadedObject.size ||
+      bytes.byteLength > MAX_STAFF_IMAGE_BYTES ||
+      detectStaffImageContentType(bytes) !== contentType
+    ) {
+      await bucket.delete(objectKey);
+      return jsonResponse({ error: "The uploaded image is invalid." }, 400);
+    }
+
+    await bucket.put(objectKey, bytes, {
+      httpMetadata: { contentType },
+      customMetadata: { visibility: "public" },
+    });
+    return jsonResponse(
+      FinalizeStaffSkinUploadResponse.parse({
+        imagePath: `/api/storage/objects/uploads/${uploadId}`,
+      }),
+    );
+  }
+
+  const imageMatch = pathname.match(
+    /^\/api\/storage\/objects\/uploads\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  );
+  if (imageMatch && request.method === "GET") {
+    if (!bucket) {
+      return jsonResponse({ error: "Staff image storage is not configured." }, 503);
+    }
+    const object = await bucket.get(`uploads/${imageMatch[1]}`);
+    const contentType = object?.httpMetadata?.contentType;
+    if (
+      !object ||
+      object.customMetadata?.visibility !== "public" ||
+      !isStaffImageContentType(contentType) ||
+      object.size > MAX_STAFF_IMAGE_BYTES
+    ) {
+      return jsonResponse({ error: "Image not found." }, 404);
+    }
+    return new Response(await object.arrayBuffer(), {
+      headers: {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Length": String(object.size),
+        "Content-Type": contentType,
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+
+  return jsonResponse({ error: "Not found." }, 404);
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const { pathname } = new URL(request.url);
 
     if (pathname === "/api/health" && request.method === "GET") {
       return jsonResponse({ status: "ok" });
+    }
+
+    if (pathname.startsWith("/api/storage/")) {
+      try {
+        return await handleSkinStorageApi(request, env);
+      } catch {
+        return jsonResponse(
+          { error: "Staff image storage is temporarily unavailable." },
+          503,
+        );
+      }
     }
 
     if (pathname.startsWith("/api/legends/")) {
